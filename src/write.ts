@@ -1,5 +1,4 @@
-import Anthropic from '@anthropic-ai/sdk';
-import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
+import type Anthropic from '@anthropic-ai/sdk';
 import { spawn } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -234,27 +233,6 @@ export interface DraftResult<T> {
 export interface Writer {
   model: string;
   draft: <T>(system: string, messages: Anthropic.MessageParam[], schema: z.ZodType<T>) => Promise<DraftResult<T>>;
-}
-
-export function anthropicWriter(model = DEFAULT_MODEL): Writer {
-  const client = new Anthropic();
-  return {
-    model,
-    async draft(system, messages, schema) {
-      const response = await client.messages.parse({
-        model,
-        max_tokens: 16000,
-        system,
-        messages,
-        output_config: { format: zodOutputFormat(schema) }
-      });
-      return {
-        value: response.parsed_output ?? null,
-        stopReason: response.stop_reason,
-        usage: { input: response.usage.input_tokens, output: response.usage.output_tokens }
-      };
-    }
-  };
 }
 
 export interface WriteOutcome {

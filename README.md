@@ -162,10 +162,23 @@ Portrait videos keep text out of the bands where Instagram, YouTube and TikTok d
 brandreel itself is deterministic: the same JSON always renders the same video. The one place a model fits is writing the JSON, and `write` does that:
 
 ```sh
-export ANTHROPIC_API_KEY=...          # or `ant auth login`
 brandreel write "3 things to check before renewing a health plan" --brand brands/policygaido/brand.json --kind reel --stills
-brandreel write "30-second launch ad for the pilot programme" --brand brands/dawnwell/brand.json --kind ad --format 16:9
+brandreel write "30-second launch ad for the pilot programme" --brand brands/dawnwell/brand.json --kind ad --format 16:9 --via gemini
 ```
+
+### Which model writes
+
+The renderer never calls a model; `write` and `look` do, through whichever backend you have:
+
+| Backend | Needs | Default model | Pick it with |
+|---|---|---|---|
+| `anthropic` | `ANTHROPIC_API_KEY` (or `ant auth login`) | `claude-opus-5` | automatic when the key is set |
+| `gemini` | `GEMINI_API_KEY` or `GOOGLE_API_KEY` | `gemini-3.5-flash` | automatic when the key is set |
+| `claude-code` | the `claude` CLI installed and logged in (a Claude subscription) | your session's model | automatic when no key is set |
+
+`--via anthropic|gemini|claude-code` or `BRANDREEL_WRITER=…` forces one; `--model` picks the model inside it. The `claude-code` backend runs `claude -p` with a JSON schema, so it uses your plan's allowance rather than API billing, and it works from inside a Claude Code session too. All three go through the same validation and repair loop; review rounds send the frames as images (Gemini and the API directly, Claude Code by reading the files).
+
+Inside Claude Code you don't even need the backend: the repo ships a `brandreel` skill, so "make a 15-second reel for PolicyGaido about room rent limits" has the session draft the JSON itself, validate it with the CLI and look at the stills.
 
 A **brand kit** (`brand.json`) is a `video.json` without `scenes`, plus two sections the writer reads:
 
@@ -183,11 +196,11 @@ A **brand kit** (`brand.json`) is a `video.json` without `scenes`, plus two sect
 }
 ```
 
-Claude (`claude-opus-5` by default, `--model` to change) gets the template reference, the writing rules, your voice and facts, and the brief, and returns the scenes as structured output. The draft is validated exactly like a hand-written script; if it fails, the errors go back to the model for a repair round. The result lands in `<kit dir>/drafts/<slug>.json`, ready for `preview`, `stills` and `render`. `--stills` renders one frame per scene straight away so you can approve it by eye.
+The model gets the template reference, the writing rules, your voice and facts, and the brief, and returns the scenes as structured output. The draft is validated exactly like a hand-written script; if it fails, the errors go back to the model for a repair round. The result lands in `<kit dir>/drafts/<slug>.json`, ready for `preview`, `stills` and `render`. `--stills` renders one frame per scene straight away so you can approve it by eye.
 
 The prompt tells the model to use only the facts you listed, so numbers, plan names and testimonials are never invented. Check the copy anyway before you publish; it is your brand.
 
-No API key? `--show-prompt` prints the exact prompt and reply shape to paste into any model, and `--from draft.json` imports the JSON it gives back through the same validation.
+No model at all? `--show-prompt` prints the exact prompt and reply shape to paste anywhere, and `--from draft.json` imports the JSON you get back through the same validation.
 
 ### Letting it write scenes, and reviewing its own work
 

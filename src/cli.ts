@@ -2,11 +2,12 @@
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
-import Anthropic from '@anthropic-ai/sdk';
 import { writeFile, mkdir } from 'node:fs/promises';
 import { fillTemplate, loadRows, placeholders, rowName } from './batch.js';
 import { MOODS, writeMusic, type Mood } from './music.js';
-import { DEFAULT_MODEL, anthropicWriter, applyLook, assemble, draftSchema, loadKit, lookPrompt, lookSample, relocateAssets, reviewCustomScenes, slugify, systemPrompt, userPrompt, writeLook, writeVideo, LOOK_SYSTEM, type Kind, type Writer } from './write.js';
+import { BACKENDS, DEFAULT_MODELS, NO_BACKEND_HELP, createWriter, detectBackend, type Backend } from './writers/index.js';
+import { describeAnthropicError, isAnthropicAuthError } from './writers/anthropic.js';
+import { applyLook, assemble, draftSchema, loadKit, lookPrompt, lookSample, relocateAssets, reviewCustomScenes, slugify, systemPrompt, userPrompt, writeLook, writeVideo, LOOK_SYSTEM, type Kind, type Writer } from './write.js';
 import { info, progress, warn } from './log.js';
 import { loadProject, loadProjectFrom, SpecError } from './load.js';
 import { totalDuration as videoLength } from './spec.js';
@@ -21,9 +22,9 @@ Usage
   brandreel batch    <series.json> --data rows.csv|rows.json [--format ...] [--out dir]
                      [--only 1,4-6] [--name "{{id}}"] [--dry-run]
   brandreel write    "<brief>" --brand brand.json [--kind reel|ad|explainer] [--length 15]
-                     [--format ...] [--style ...] [--model claude-opus-5] [-o video.json] [--stills]
-                     [--custom] [--qa 1] [--show-prompt] [--from draft.json]
-  brandreel look     "<description>" --brand brand.json [--model ...] [--stills] [--show-prompt]
+                     [--format ...] [--style ...] [--via anthropic|gemini|claude-code] [--model ...]
+                     [-o video.json] [--stills] [--custom] [--qa 1] [--show-prompt] [--from draft.json]
+  brandreel look     "<description>" --brand brand.json [--via ...] [--model ...] [--stills] [--show-prompt]
   brandreel music    --mood calm|upbeat|tech --seconds 15 [--bpm 90] [--key C] [--seed 1] -o bed.m4a
   brandreel stills   <video.json> --at 1,4.5,9 [--out dir] [--format ...] [--guides]
   brandreel preview  <video.json> [--port 4400] [--format ...] [--guides]
@@ -32,7 +33,8 @@ Usage
   brandreel styles
 
 Needs FFmpeg on PATH and Chrome/Chromium (or BRANDREEL_CHROME=/path/to/chrome).
-"write" needs ANTHROPIC_API_KEY (or an \`ant auth login\` profile); without one, use --show-prompt and --from.`;
+"write" and "look" need a model: ANTHROPIC_API_KEY, GEMINI_API_KEY, or a logged-in Claude Code CLI
+(picked automatically, or with --via). Without any, use --show-prompt and --from.`;
 
 const TEMPLATE_HELP: Record<string, string> = {
   'statement': 'Bold headline lines, optionally beside a card that gets stamped',
@@ -75,6 +77,29 @@ const seconds = (ms: number): string => `${(ms / 1000).toFixed(0)}s`;
 
 type Values = Record<string, string | boolean | undefined>;
 
+// Which model backend to use for write/look, and a readable message when a call fails.
+function pickBackend(values: Values): Backend | null {
+  const via = values['via'] as string | undefined;
+  if (via) {
+    if (!(BACKENDS as string[]).includes(via)) { warn(`--via must be one of ${BACKENDS.join(', ')}.`); return null; }
+    return via as Backend;
+  }
+  const detected = detectBackend();
+  if (!detected) warn(NO_BACKEND_HELP);
+  return detected;
+}
+function explainModelError(backend: Backend, error: unknown): string {
+  if (backend === 'anthropic') {
+    if (isAnthropicAuthError(error)) return 'No Anthropic credentials. Set ANTHROPIC_API_KEY (or run `ant auth login`), or use --via gemini / --via claude-code.';
+    const described = describeAnthropicError(error);
+    if (described) return described;
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  if (backend === 'gemini' && /API key|credential|PERMISSION_DENIED|UNAUTHENTICATED/i.test(message)) return `Gemini rejected the credentials: ${message}. Set GEMINI_API_KEY.`;
+  if (backend === 'gemini' && /not found|NOT_FOUND|is not supported/i.test(message)) return `Gemini error: ${message}. Try another model with --model (for example gemini-3.1-pro-preview).`;
+  return `${backend} error: ${message}`;
+}
+
 // write: brief + brand kit → Claude drafts scenes → validated video.json (+ optional stills)
 async function write(brief: string | undefined, values: Values): Promise<number> {
   const kitPath = values['brand'] as string | undefined;
@@ -96,6 +121,8 @@ async function write(brief: string | undefined, values: Values): Promise<number>
   }
 
   let outcome;
+  const backend = values['from'] ? null : pickBackend(values);
+  if (!values['from'] && !backend) return 1;
   if (values['from']) {
     // A draft produced elsewhere (any model, or by hand): same coercion, validation and save path.
     const parsed = draftSchema.safeParse(JSON.parse(await readFile(String(values['from']), 'utf8')));
@@ -103,11 +130,11 @@ async function write(brief: string | undefined, values: Values): Promise<number>
     const { project, video, files } = await assemble(kit, dir, parsed.data, input, String(values['from']));
     outcome = { project, video, draft: parsed.data, attempts: 0, usage: { input: 0, output: 0 }, files };
   } else {
-    const model = (values['model'] as string | undefined) ?? DEFAULT_MODEL;
+    const chosen = backend as Backend;
+    const model = (values['model'] as string | undefined) ?? DEFAULT_MODELS[chosen];
     try {
-      // The client constructor throws when it finds no credentials at all; a wrong key fails later as AuthenticationError.
-      const writer: Writer = anthropicWriter(model);
-      info(`Drafting a ${seconds}s ${kind} at ${format} with ${model}${allowCustom ? ', custom scenes allowed' : ''}…`);
+      const writer: Writer = createWriter(chosen, model);
+      info(`Drafting a ${seconds}s ${kind} at ${format} via ${chosen}${model ? ` (${model})` : ''}${allowCustom ? ', custom scenes allowed' : ''}…`);
       outcome = await writeVideo(writer, input, dir);
       const customCount = outcome.draft.scenes.filter(scene => scene.template === 'custom').length;
       if (customCount && rounds > 0) {
@@ -118,12 +145,9 @@ async function write(brief: string | undefined, values: Values): Promise<number>
         outcome = review.outcome;
       }
     } catch (error) {
-      // A missing key surfaces as a plain error from the SDK's credential resolver; a wrong key as AuthenticationError.
-      const noCredentials = error instanceof Anthropic.AuthenticationError || (error instanceof Error && !(error instanceof Anthropic.APIError) && /authentication method|API_KEY|api key|credential/i.test(error.message));
-      if (noCredentials) { warn('No Anthropic credentials. Set ANTHROPIC_API_KEY (or run `ant auth login`), or draft with any model using --show-prompt and import the JSON with --from.'); return 1; }
-      if (error instanceof Anthropic.RateLimitError) { warn('Rate limited by the API. Try again in a minute.'); return 1; }
-      if (error instanceof Anthropic.APIError) { warn(`API error ${error.status ?? ''}: ${error.message}`); return 1; }
-      throw error;
+      if (error instanceof SpecError) throw error;
+      warn(explainModelError(chosen, error));
+      return 1;
     }
   }
 
@@ -159,17 +183,18 @@ async function look(description: string | undefined, values: Values): Promise<nu
   if (!description || !kitPath) { warn('Usage: brandreel look "<description of the look>" --brand brands/<name>/brand.json'); return 1; }
   const { kit, dir } = await loadKit(kitPath);
   if (values['show-prompt']) { info(`--- system ---\n${LOOK_SYSTEM}\n\n--- user ---\n${lookPrompt(kit, description)}`); return 0; }
-  const model = (values['model'] as string | undefined) ?? DEFAULT_MODEL;
+  const backend = pickBackend(values);
+  if (!backend) return 1;
+  const model = (values['model'] as string | undefined) ?? DEFAULT_MODELS[backend];
   let result;
   try {
-    const writer: Writer = anthropicWriter(model);
-    info(`Designing a look for ${(kit as { brand?: { name?: string } }).brand?.name ?? 'the brand'} with ${model}…`);
+    const writer: Writer = createWriter(backend, model);
+    info(`Designing a look for ${(kit as { brand?: { name?: string } }).brand?.name ?? 'the brand'} via ${backend}${model ? ` (${model})` : ''}…`);
     result = await writeLook(writer, kit, description);
   } catch (error) {
-    const noCredentials = error instanceof Anthropic.AuthenticationError || (error instanceof Error && !(error instanceof Anthropic.APIError) && /authentication method|API_KEY|api key|credential/i.test(error.message));
-    if (noCredentials) { warn('No Anthropic credentials. Set ANTHROPIC_API_KEY (or run `ant auth login`).'); return 1; }
-    if (error instanceof Anthropic.APIError) { warn(`API error ${error.status ?? ''}: ${error.message}`); return 1; }
-    throw error;
+    if (error instanceof SpecError) throw error;
+    warn(explainModelError(backend, error));
+    return 1;
   }
   const cssFile = path.join(dir, 'look.css');
   await writeFile(cssFile, result.look.css.endsWith('\n') ? result.look.css : `${result.look.css}\n`);
@@ -195,7 +220,7 @@ async function main(): Promise<number> {
       output: { type: 'string', short: 'o' }, format: { type: 'string' }, style: { type: 'string' }, workers: { type: 'string' },
       at: { type: 'string' }, out: { type: 'string' }, port: { type: 'string' }, guides: { type: 'boolean' },
       data: { type: 'string' }, only: { type: 'string' }, name: { type: 'string' }, 'dry-run': { type: 'boolean' },
-      brand: { type: 'string' }, kind: { type: 'string' }, length: { type: 'string' }, model: { type: 'string' },
+      brand: { type: 'string' }, kind: { type: 'string' }, length: { type: 'string' }, model: { type: 'string' }, via: { type: 'string' },
       mood: { type: 'string' }, seconds: { type: 'string' }, bpm: { type: 'string' }, key: { type: 'string' }, seed: { type: 'string' },
       stills: { type: 'boolean' }, 'show-prompt': { type: 'boolean' }, from: { type: 'string' }, custom: { type: 'boolean' }, qa: { type: 'string' },
       help: { type: 'boolean', short: 'h' }
