@@ -1,0 +1,19 @@
+/* soft: rounded, pastel, friendly. Big radii, tinted backgrounds, bouncy motion.
+   Suits consumer apps, wellness, education. */
+#stage {
+  --radius-card: 48px; --radius-chip: 32px;
+  --shadow-card: 0 30px 70px color-mix(in srgb, var(--primary) 18%, transparent);
+  --shadow-chip: 0 14px 34px color-mix(in srgb, var(--primary) 12%, transparent);
+  --display-tracking: 0; --display-leading: .96;
+  --grain-opacity: 0;
+}
+.theme-light { --scene-bg: linear-gradient(160deg, var(--paper) 0%, var(--tint-strong) 100%); }
+.theme-dark { --scene-bg: linear-gradient(160deg, color-mix(in srgb, var(--primary-dark) 70%, var(--night)) 0%, var(--night) 100%); }
+.theme-brand { --scene-bg: linear-gradient(160deg, var(--primary) 0%, color-mix(in srgb, var(--primary) 60%, var(--accent)) 100%); }
+.stamp { border-radius: 40px; border-width: 8px; }
+.kicker::before { width: 16px; height: 16px; border-radius: 50%; }
+.ask { border-radius: 40px 40px 12px 40px; }
+.answer, .typing { border-radius: 40px 40px 40px 12px; }
+.flag { border-radius: 999px; }
+.mf-card .tag, .vs-badge { border-radius: 999px; }
+.step .num, .list-item .n { border-radius: 24px; }

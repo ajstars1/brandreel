@@ -1,11 +1,11 @@
 import { gsap } from 'gsap';
-import { countUp, fadeUp, h, headline, img, markup, revealLines } from '../dom.js';
+import { M, countUp, fadeUp, h, headline, img, markup, revealLines } from '../dom.js';
 import type { Template } from '../types.js';
 
 // A question is typed to the brand's assistant, it thinks, answers, and results slide in.
 export const chat: Template<'chat'> = (root, scene, { brand }) => {
   const tl = gsap.timeline();
-  const title = headline(scene.headline, 'h-lg');
+  const title = headline(scene.headline);
   const caption = scene.caption ? h('div', 'caption', markup(scene.caption)) : null;
   const askText = h('span', 'ask-text');
   const ask = h('div', 'ask', askText);
@@ -23,8 +23,8 @@ export const chat: Template<'chat'> = (root, scene, { brand }) => {
   const typed = { n: 0 };
   revealLines(tl, title.parts, .1, .2);
   if (caption) fadeUp(tl, caption, .7, 16);
-  tl.from(card, { y: 120, opacity: 0, duration: .8, ease: 'power3.out' }, .15);
-  tl.from(ask, { scale: .6, opacity: 0, transformOrigin: '100% 100%', duration: .35, ease: 'back.out(1.7)' }, .7);
+  tl.from(card, { y: 120, opacity: 0, duration: M().enter, ease: M().ease }, .15);
+  tl.from(ask, { scale: .6, opacity: 0, transformOrigin: '100% 100%', duration: .35, ease: M().pop }, .7);
   tl.to(typed, { n: scene.question.length, duration: Math.min(2, scene.question.length / 45), ease: 'none', onUpdate: () => { askText.textContent = scene.question.slice(0, Math.round(typed.n)); } }, .75);
   const thinking = .75 + Math.min(2, scene.question.length / 45) + .1;
   tl.set(answer, { visibility: 'hidden' }, 0);

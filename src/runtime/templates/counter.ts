@@ -1,5 +1,5 @@
 import { gsap } from 'gsap';
-import { countUp, fadeUp, h, markup } from '../dom.js';
+import { M, countUp, fadeUp, h, markup } from '../dom.js';
 import type { Template } from '../types.js';
 
 // A big number counts up over a drifting wall of cards.
@@ -17,7 +17,7 @@ export const counter: Template<'counter'> = (root, scene, { duration }) => {
   root.append(h('div', 'tiles', ...rows), h('div', 'veil'), h('div', 'center', count, title, subtitle));
   tl.from(rows, { opacity: 0, duration: .5, stagger: .04 }, 0);
   tl.to(rows, { x: i => (i % 2 ? -600 : 300), duration, ease: 'none' }, 0);
-  tl.from(count, { scale: .7, opacity: 0, duration: .6, ease: 'power3.out' }, .15);
+  tl.from(count, { scale: .7, opacity: 0, duration: M().enter * .8, ease: M().pop }, .15);
   countUp(tl, number, scene.value, n => n.toLocaleString('en-IN'), 1.3, .15);
   fadeUp(tl, title, 1.2, 30);
   if (subtitle) fadeUp(tl, subtitle, 1.6, 30);

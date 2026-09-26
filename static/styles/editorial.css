@@ -1,0 +1,21 @@
+/* editorial: calm and typographic. Flat backgrounds, hairline rules instead of shadows,
+   smaller headlines with more air, slower fades. Suits healthcare, finance, B2B. */
+#stage {
+  --h-xl-base: 150px; --h-lg-base: 120px; --h-md-base: 96px; --h-sm-base: 76px;
+  --display-tracking: -.005em; --display-leading: 1.02;
+  --radius-card: 8px; --radius-chip: 8px; --radius-pill: 8px;
+  --shadow-card: 0 24px 60px rgba(0,0,0,.08);
+  --shadow-chip: none;
+  --card-border: 1px solid var(--line);
+  --grain-opacity: 0;
+}
+.theme-light { --scene-bg: var(--paper); }
+.theme-dark { --scene-bg: var(--night); }
+.theme-brand { --scene-bg: var(--primary-dark); }
+.display { font-weight: 500; }
+.kicker { letter-spacing: .24em; font-weight: 600; font-size: 22px; }
+.kicker::before { width: 60px; height: 1px; }
+.caption, .body { font-weight: 400; }
+.cta { box-shadow: none; }
+.stamp { border-width: 6px; border-radius: 6px; }
+.list-item, .vs-col, .mf-card { box-shadow: none; }

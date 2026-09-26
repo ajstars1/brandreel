@@ -31,10 +31,10 @@ function ffmpeg(args: string[], input?: 'pipe'): { done: Promise<void>; stdin: N
   return { done, stdin: child.stdin };
 }
 
-async function openPage(browser: Browser, url: string, size?: { width: number; height: number }): Promise<{ page: Page; info: PageInfo }> {
+async function openPage(browser: Browser, url: string, size?: { width: number; height: number }, extraQuery = ''): Promise<{ page: Page; info: PageInfo }> {
   const context = await browser.newContext({ viewport: size ?? { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
   const page = await context.newPage();
-  await page.goto(`${url}?render`);
+  await page.goto(`${url}?render${extraQuery}`);
   await page.waitForFunction(() => window.brandreel !== undefined, undefined, { timeout: 30_000 });
   const info = await page.evaluate(() => {
     const reel = window.brandreel;
@@ -117,14 +117,14 @@ export async function renderVideo(project: Project, options: RenderOptions): Pro
   }
 }
 
-export async function renderStills(project: Project, times: number[], directory: string): Promise<string[]> {
+export async function renderStills(project: Project, times: number[], directory: string, options: { guides?: boolean } = {}): Promise<string[]> {
   const server = await startServer(project);
   const browser = await launchBrowser();
   try {
     const probe = await openPage(browser, server.url);
     const { width, height } = probe.info;
     await probe.page.context().close();
-    const { page } = await openPage(browser, server.url, { width, height });
+    const { page } = await openPage(browser, server.url, { width, height }, options.guides ? '&guides' : '');
     await mkdir(directory, { recursive: true });
     const files: string[] = [];
     for (const time of times) {

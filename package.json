@@ -19,7 +19,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.runtime.json --noEmit",
     "test": "vitest run",
     "example": "npm run build && node dist/cli.js render examples/acme/video.json",
-    "prepublishOnly": "npm run build && npm test"
+    "prepublishOnly": "npm run build && npm test",
+    "example:reel": "npm run build && node dist/cli.js render examples/clearclause/reel.json"
   },
   "keywords": [
     "video",

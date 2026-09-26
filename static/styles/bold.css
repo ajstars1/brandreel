@@ -1,0 +1,3 @@
+/* bold: the default look. Big condensed headlines, deep shadows, snappy motion. The base
+   tokens in styles.css already describe it, so this file only exists so every pack has one. */
+#stage { --grain-opacity: .06; }

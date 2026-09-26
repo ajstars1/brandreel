@@ -1,11 +1,11 @@
 import { gsap } from 'gsap';
-import { drift, h, headline, revealLines } from '../dom.js';
+import { M, drift, h, headline, revealLines } from '../dom.js';
 import type { Template } from '../types.js';
 
 // A bold statement, optionally beside a document card that gets stamped.
 export const statement: Template<'statement'> = (root, scene, { duration }) => {
   const tl = gsap.timeline();
-  const title = headline(scene.lines, scene.card ? 'h-lg' : 'h-xl');
+  const title = headline(scene.lines, scene.card ? 'h-lg' : undefined);
   if (!scene.card) {
     root.append(h('div', 'center', title.node));
     revealLines(tl, title.parts, .15);
@@ -19,7 +19,7 @@ export const statement: Template<'statement'> = (root, scene, { duration }) => {
   root.append(h('div', 'split', h('div', 'copy', title.node), h('div', 'visual', card)));
 
   revealLines(tl, title.parts, .15);
-  tl.from(card, { x: 160, rotation: 6, opacity: 0, duration: 1, ease: 'power3.out' }, .1);
+  tl.from(card, { x: 160, rotation: 6, opacity: 0, duration: M().enter * 1.3, ease: M().ease }, .1);
   tl.from(bars, { scaleX: 0, transformOrigin: '0 50%', stagger: .06, duration: .5, ease: 'power2.out' }, .5);
   if (stamp) {
     tl.fromTo(stamp, { scale: 3.2, opacity: 0, rotation: -30 }, { scale: 1, opacity: 1, rotation: -12, duration: .32, ease: 'power4.in' }, 1.7);

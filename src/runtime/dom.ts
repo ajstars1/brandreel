@@ -1,5 +1,12 @@
 import { gsap } from 'gsap';
-import { isAccentLine, parseMarkup } from '../markup.js';
+import { STYLE_PACKS, type Motion } from '../constants.js';
+import { isAccentLine, parseMarkup, plainText } from '../markup.js';
+
+// The active motion preset. The runtime sets it from the style pack before any scene is
+// built; every helper and template reads it instead of hardcoding its own numbers.
+let motion: Motion = { ...STYLE_PACKS.bold.motion };
+export const setMotion = (next: Motion): void => { motion = next; };
+export const M = (): Motion => motion;
 
 type Child = Node | string | null | undefined | false;
 
@@ -25,10 +32,22 @@ export const markup = (source: string): DocumentFragment => {
   return fragment;
 };
 
+// Picks a headline size from the longest line. Generous on purpose: fitHeadlines() in the
+// runtime measures every line once fonts are loaded and shrinks the block if one overflows.
+export const sizeFor = (lines: string[]): string => {
+  const longest = Math.max(...lines.map(line => plainText(line).length));
+  return longest <= 16 ? 'h-xl' : longest <= 26 ? 'h-lg' : longest <= 40 ? 'h-md' : 'h-sm';
+};
+// Hooks wrap freely, so they can run larger than a fixed-line headline.
+export const hookSize = (text: string): string => {
+  const length = plainText(text).length;
+  return length <= 30 ? 'h-xl' : length <= 60 ? 'h-lg' : 'h-md';
+};
+
 // A headline whose lines slide up from behind a mask. Returns the block and its moving parts.
-export const headline = (lines: string[], sizeClass: string): { node: HTMLElement; parts: HTMLElement[] } => {
+export const headline = (lines: string[], sizeClass = sizeFor(lines)): { node: HTMLElement; parts: HTMLElement[] } => {
   const parts: HTMLElement[] = [];
-  const node = h('div', `display ${sizeClass}`, ...lines.map(line => {
+  const node = h('div', `display fit ${sizeClass}`, ...lines.map(line => {
     const part = h('span', 'reveal', markup(line));
     parts.push(part);
     return h('div', isAccentLine(parseMarkup(line)) ? 'line accent-line' : 'line', h('span', 'clip', part));
@@ -36,12 +55,18 @@ export const headline = (lines: string[], sizeClass: string): { node: HTMLElemen
   return { node, parts };
 };
 
-export const revealLines = (tl: gsap.core.Timeline, parts: HTMLElement[], at: number, stagger = .18): void => {
-  tl.from(parts, { yPercent: 115, duration: .7, stagger, ease: 'power4.out' }, at);
+export const kicker = (text: string): HTMLElement => h('div', 'kicker', markup(text));
+
+export const revealLines = (tl: gsap.core.Timeline, parts: HTMLElement[], at: number, stagger = motion.stagger): void => {
+  tl.from(parts, { yPercent: 115, duration: motion.enter, stagger, ease: motion.ease }, at);
 };
 
 export const fadeUp = (tl: gsap.core.Timeline, target: gsap.TweenTarget, at: number, distance = 20): void => {
-  tl.from(target, { opacity: 0, y: distance, duration: .5, ease: 'power3.out' }, at);
+  tl.from(target, { opacity: 0, y: distance, duration: motion.enter * .7, ease: motion.ease }, at);
+};
+
+export const popIn = (tl: gsap.core.Timeline, target: gsap.TweenTarget, at: number, from = .6, stagger = 0): void => {
+  tl.from(target, { scale: from, opacity: 0, duration: motion.enter * .6, ease: motion.pop, stagger }, at);
 };
 
 // Counts up inside `node`. Driven by the timeline so seeking lands on the exact value.
@@ -52,8 +77,8 @@ export const countUp = (tl: gsap.core.Timeline, node: HTMLElement, to: number, f
 };
 
 // Slow push-in so held frames never feel frozen.
-export const drift = (tl: gsap.core.Timeline, target: gsap.TweenTarget, duration: number, amount = .03): void => {
-  tl.fromTo(target, { scale: 1 }, { scale: 1 + amount, duration, ease: 'none' }, 0);
+export const drift = (tl: gsap.core.Timeline, target: gsap.TweenTarget, duration: number, amount = motion.drift): void => {
+  if (amount > 0) tl.fromTo(target, { scale: 1 }, { scale: 1 + amount, duration, ease: 'none' }, 0);
 };
 
 export const grain = (): HTMLElement => h('div', 'grain');

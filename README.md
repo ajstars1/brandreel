@@ -1,20 +1,22 @@
 # brandreel
 
 **Branded motion-graphics videos from a JSON script.**
-Write your brand kit and a list of scenes, then render a crisp MP4 in 16:9, 9:16, 1:1 or 4:5.
+Write your brand kit and a list of scenes, then render crisp MP4s in 16:9, 9:16, 1:1 or 4:5. Render one launch film, or a month of daily reels from a spreadsheet.
 
 <p align="center"><img src="docs/demo.gif" width="720" alt="Clearclause example video"></p>
 
 ```sh
-npx brandreel render video.json                 # → out/video-16x9.mp4
-npx brandreel render video.json --format 9:16   # same script, Reels/Shorts layout
+npx brandreel render video.json                       # → out/video-16x9.mp4
+npx brandreel render video.json --format 9:16         # same script, Reels layout
+npx brandreel batch series.json --data tips.csv       # 30 rows → 30 reels
 ```
 
-- **Script, not timeline.** A video is a `video.json`: your brand (colours, fonts, logo) plus scenes like `statement`, `chat`, `counter`, `doc-scan`, `end-card`. No editor, no keyframes.
-- **One script, every format.** Templates reflow for landscape, portrait and square.
+- **Script, not timeline.** A video is a `video.json`: your brand (colours, fonts, logo) plus scenes like `hook`, `tip`, `stat`, `chat`, `doc-scan`, `end-card`. No editor, no keyframes.
+- **16 templates, 4 style packs, custom themes.** The same script can look bold, editorial, soft or tech. Any scene can take its own colours.
+- **One script, every format.** Templates reflow for landscape, portrait and square, and keep text clear of the app controls on 9:16.
+- **Batch rendering.** A series is a script with `{{placeholders}}`; feed it a CSV or JSON and get a numbered set of videos.
 - **Frame-exact.** Scenes are HTML + [GSAP](https://gsap.com) timelines. The renderer seeks to every frame and screenshots it, so nothing is dropped or recorded in real time.
-- **Fast.** Frames are split across parallel headless Chrome workers and joined without re-encoding. A 33-second 1080p video renders in about a minute on 4 cores.
-- **Local.** Nothing is uploaded. You need Node 20+, FFmpeg, and Chrome or Chromium.
+- **Fast and local.** Frames are split across parallel headless Chrome workers and joined without re-encoding: a 33-second 1080p video renders in about a minute on 4 cores. Nothing is uploaded. You need Node 20+, FFmpeg, and Chrome or Chromium.
 
 <p align="center"><img src="docs/portrait.jpg" width="400" alt="The same script rendered at 9:16"></p>
 
@@ -23,17 +25,20 @@ npx brandreel render video.json --format 9:16   # same script, Reels/Shorts layo
 ```sh
 git clone https://github.com/ajstars1/brandreel && cd brandreel
 npm install
-npm run example          # renders examples/clearclause/video.json
+npm run example          # renders examples/clearclause/video.json (a 33 s launch film)
+npm run example:reel     # renders examples/clearclause/reel.json (a 9:16 reel using the short-form templates)
 ```
 
 Commands:
 
 ```sh
-brandreel render   <video.json> [-o out.mp4] [--format 16:9|9:16|1:1|4:5] [--workers N]
-brandreel preview  <video.json> [--port 4400]      # live looping preview in the browser
-brandreel stills   <video.json> --at 1,4.5,9       # PNG frames for quick checks
-brandreel validate <video.json>                    # schema check with readable errors
-brandreel templates                                # list scene templates
+brandreel render   <video.json> [-o out.mp4] [--format 16:9|9:16|1:1|4:5] [--style bold|editorial|soft|tech] [--workers N]
+brandreel batch    <series.json> --data rows.csv|rows.json [--format ...] [--out dir] [--only 1,4-6] [--name "{{id}}"] [--dry-run]
+brandreel preview  <video.json> [--port 4400] [--guides]     # live looping preview in the browser
+brandreel stills   <video.json> --at 1,4.5,9 [--guides]      # PNG frames for quick checks
+brandreel validate <video.json>                              # schema check with readable errors
+brandreel templates                                          # list scene templates
+brandreel styles                                             # list style packs
 ```
 
 brandreel finds Chrome automatically. Set `BRANDREEL_CHROME=/path/to/chrome` to pick one, or run `npx playwright-core install chromium`.
@@ -42,12 +47,18 @@ brandreel finds Chrome automatically. Set `BRANDREEL_CHROME=/path/to/chrome` to 
 
 ```jsonc
 {
-  "format": "16:9",            // 16:9 | 9:16 | 1:1 | 4:5
+  "format": "9:16",            // 16:9 | 9:16 | 1:1 | 4:5
   "fps": 30,
-  "transition": "wipe",        // wipe | fade | cut
+  "style": "bold",             // bold | editorial | soft | tech, or { "extends": "soft", "css": "look.css" }
+  "transition": "wipe",        // wipe | fade | cut (defaults to the style pack's choice)
+  "progressBar": true,         // thin bar filling over the video, for reels
+  "themes": {                  // optional custom colour sets any scene can use by name
+    "sunrise": { "background": ["#ffd48a", "#ff8f6b"], "text": "#141627", "em": "#0b1f66" }
+  },
   "audio": { "src": "music.mp3", "volume": 0.8, "fadeOut": 1.5 },   // optional
   "brand": {
     "name": "Clearclause",
+    "handle": "@clearclause",  // shown as a small watermark on every scene
     "logo": "logo.svg",
     "logoMotion": "pop",       // pop | spin (for round or pinwheel marks)
     "colors": { "primary": "#1f5eff", "primaryDark": "#0b1f66", "accent": "#7fb2ff", "highlight": "#c6f36b" },
@@ -58,39 +69,103 @@ brandreel finds Chrome automatically. Set `BRANDREEL_CHROME=/path/to/chrome` to 
     }
   },
   "scenes": [
-    { "template": "statement", "duration": 3.8, "lines": ["You signed", "the contract.", "*Then you read it.*"] },
-    { "template": "end-card", "duration": 4, "tagline": "Know what you *sign.*", "cta": "Try it free" }
+    { "template": "hook", "duration": 3, "text": "Your contract has a *trap* in clause 9." },
+    { "template": "tip", "duration": 5, "kicker": "Tip 7 of 30", "headline": ["Cap the", "*renewal price.*"],
+      "body": "Most vendor agreements let the price rise every year. Ask for a cap in writing." },
+    { "template": "stat", "duration": 4, "theme": "sunrise", "value": "12%", "label": "average yearly increase hidden in vendor contracts." },
+    { "template": "end-card", "duration": 3.5, "tagline": "Know what you *sign.*", "cta": "Try it free" }
   ]
 }
 ```
 
-Paths are relative to the `video.json`. Wrap words in `*asterisks*` to set them in the accent font and colour. A line that is entirely accent becomes a smaller italic line under the headline. Optional colours (`ink`, `paper`, `night`, `positive`, `warning`, `negative`) have sensible defaults.
+Paths are relative to the `video.json`. Wrap words in `*asterisks*` to set them in the accent font and colour. A headline line that is entirely accent becomes a smaller italic line. Optional colours (`ink`, `paper`, `night`, `positive`, `warning`, `negative`) have sensible defaults. Headline lines never wrap: once fonts load, the runtime measures each line and shrinks the block until the widest one fits.
 
-Every scene takes `duration` (seconds) and an optional `theme` (`light`, `dark` or `brand`). See [docs/templates.md](docs/templates.md) for each template's fields.
+Every scene takes `duration` (seconds) and an optional `theme` (`light`, `dark`, `brand`, or one of your custom themes). See [docs/templates.md](docs/templates.md) for each template's fields.
 
-| Template | What it shows |
-|---|---|
-| `statement` | Bold headline lines, optionally beside a card that gets stamped |
-| `strike` | A line gets crossed out, then the real point lands |
-| `logo-reveal` | Logo pops or spins in with ripples, wordmark and tagline |
-| `chat` | A question typed to your assistant, an answer, scored results |
-| `counter` | A big number counts up over a drifting wall of cards |
-| `doc-scan` | A document is scanned and findings pop out beside it |
-| `steps` | Headline beside a numbered path that fills in |
-| `end-card` | Logo lockup, tagline, call to action, fine print |
+| Template | What it shows | Good for |
+|---|---|---|
+| `hook` | One line, word by word, as big as it fits | The first second of a reel |
+| `tip` | Kicker, headline, short body, optional note | Daily tips |
+| `myth-fact` | A myth is crossed out, then the fact lands | Myth busting |
+| `stat` | One number counts up: `57%`, `₹3,40,000`, `3x` | Stat cards |
+| `quote` | Testimonial revealed at speaking pace, with author and photo | Social proof |
+| `list` | "Top 5": a title beside items that arrive one at a time | Listicles |
+| `versus` | Two columns, the old way vs the better way, with a VS badge | Comparisons |
+| `media` | A photo with a slow push-in and the headline over a shade | Photo posts |
+| `statement` | Bold headline lines, optionally beside a card that gets stamped | Opening a story |
+| `strike` | A line gets crossed out, then the real point lands | Reframing |
+| `logo-reveal` | Logo pops or spins in with ripples, wordmark and tagline | The reveal |
+| `chat` | A question typed to your assistant, an answer, scored results | AI products |
+| `counter` | A big number counts up over a drifting wall of cards | Scale claims |
+| `doc-scan` | A document is scanned and findings pop out beside it | Analysis products |
+| `steps` | Headline beside a numbered path that fills in | How it works |
+| `end-card` | Logo lockup, tagline, call to action, fine print | Every ending |
+
+## Themes and style packs
+
+**Themes** are colours per scene. Three are built in and derived from your brand: `light`, `dark` and `brand`. Declare your own under `themes` and use them by name. A custom theme has a `background` (a colour or a two-stop gradient) and `text`, plus optional `em` (accent words), `soft` (captions), `surface` and `surfaceText` (cards). Buttons and cards pick readable colours from whether the background is light or dark.
+
+**Style packs** are the overall look and motion: corner radii, shadows, headline sizes, textures, and how fast things enter. Set `"style"` to one of:
+
+| Pack | Look | Motion | Default transition |
+|---|---|---|---|
+| `bold` | Big condensed headlines, deep shadows | Snappy | wipe |
+| `editorial` | Flat backgrounds, hairlines, calmer type | Slow fades | fade |
+| `soft` | Rounded, pastel tints | Bouncy | wipe |
+| `tech` | Sharp corners, faint grid, glowing accents | Quick | cut |
+
+Try one without editing the script: `brandreel stills video.json --style editorial --at 3,10`.
+
+To make a brand's own look, extend a pack with a CSS file: `"style": { "extends": "editorial", "css": "look.css", "motion": { "enter": 0.9 } }`. Your CSS loads after the pack and can override any token in `static/styles.css` (`--radius-card`, `--shadow-card`, `--h-xl-base`, `--texture`, …) or any selector. Everything is in design pixels: the short side of the frame is always 1080.
+
+## Reels
+
+<p align="center"><img src="docs/reels.jpg" width="720" alt="hook, tip, stat and versus scenes at 9:16"></p>
+
+Portrait videos keep text out of the bands where Instagram, YouTube and TikTok draw their own controls (220 px top, 340 px bottom, in design pixels). Turn that off with `"safeArea": false`. Check it with `--guides`, which draws the bands on stills and previews.
+
+- `brand.handle` adds a small watermark pill on every scene (disable with `"watermark": false`).
+- `"progressBar": true` fills a thin bar over the length of the video.
+- `hook` → `tip` → `end-card` at 9:16 is an 11-second reel. Add `audio` for music.
+
+## Batch: a series from a spreadsheet
+
+A series is a normal `video.json` with `{{placeholders}}`:
+
+```jsonc
+{ "template": "tip", "duration": 5.6,
+  "kicker": "Tip {{n}} of 30",
+  "headline": ["{{headline1}}", "{{headline2?}}"],
+  "body": "{{body}}",
+  "note": "{{note?}}" }
+```
+
+- `{{name}}` inserts the row's text, anywhere in a string.
+- `{{name?}}` is optional: an empty cell removes the field (or the list entry) entirely.
+- `{{name:number}}` and `{{name:json}}` must be the whole string and give a number or parsed JSON (for `counter.value`, `list.items`, scores).
+
+Then:
+
+```sh
+brandreel batch series/tips.json --data series/tips.csv --dry-run     # validate every row
+brandreel batch series/tips.json --data series/tips.csv               # → series/out/<id>-9x16.mp4 per row
+brandreel batch series/tips.json --data series/tips.csv --only 3,7-9  # a few rows
+```
+
+Files are named by the row's `id`, `slug` or `name` column (or `--name "tip-{{n}}"`), else `row-01`, `row-02`, …. The CSV parser handles quotes, commas and newlines inside cells; a `.json` array of objects works too. Rows that fail validation are reported and skipped; the rest still render.
+
+The same mechanism makes ad variants: put three hooks and two calls to action in six rows and render them all for testing.
 
 ## How it works
 
 1. `load.ts` validates the script with [zod](https://zod.dev) and maps local assets to URLs.
-2. `server.ts` serves a page with the runtime, GSAP, the stylesheet and your assets on `127.0.0.1`.
-3. The runtime (`src/runtime/`) builds each scene's DOM and GSAP timeline and chains them on one paused master timeline with transitions.
+2. `server.ts` serves a page with the runtime, GSAP, the base stylesheet, the style pack and your assets on `127.0.0.1`.
+3. The runtime (`src/runtime/`) builds each scene's DOM and GSAP timeline, applies the theme and motion preset, and chains everything on one paused master timeline with transitions.
 4. `render.ts` opens one headless Chrome per worker. Each worker seeks the timeline to each of its frames, captures it, and pipes PNGs into its own FFmpeg segment. The segments are concatenated without re-encoding, and the audio is mixed in with a fade-out.
-
-All layout is authored at a 1080px short side, so the same template scales cleanly to every format.
 
 ## Private brand kits
 
-Put client work in `brands/<name>/video.json`. The folder is gitignored, so commercial fonts and client logos never end up in the repo.
+Put client work in `brands/<name>/`. The folder is gitignored, so commercial fonts and client logos never end up in the repo.
 
 ## Development
 
@@ -100,7 +175,7 @@ npm run typecheck
 npm test            # vitest
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) to add a template.
+See [CONTRIBUTING.md](CONTRIBUTING.md) to add a template or a style pack.
 
 ## Licence
 

@@ -1,0 +1,44 @@
+{
+  "format": "9:16",
+  "fps": 30,
+  "style": "bold",
+  "progressBar": true,
+  "themes": {
+    "sunrise": { "background": ["#ffd48a", "#ff8f6b"], "text": "#141627", "em": "#0b1f66" }
+  },
+  "brand": {
+    "name": "Clearclause",
+    "handle": "@clearclause",
+    "logo": "logo.svg",
+    "colors": { "primary": "#1f5eff", "primaryDark": "#0b1f66", "accent": "#7fb2ff", "highlight": "#c6f36b", "ink": "#0f1424", "paper": "#f8f9fc", "night": "#060a1a" },
+    "fonts": {
+      "display": { "family": "Anton", "uppercase": true, "files": [{ "src": "fonts/Anton.woff2", "weight": 400 }] },
+      "body": { "family": "Poppins", "files": [
+        { "src": "fonts/Poppins-Regular.woff2", "weight": 400 },
+        { "src": "fonts/Poppins-SemiBold.woff2", "weight": 600 },
+        { "src": "fonts/Poppins-Bold.woff2", "weight": 700 }
+      ] },
+      "accent": { "family": "Instrument Serif", "files": [{ "src": "fonts/InstrumentSerif-Italic.woff2", "weight": 400, "style": "italic" }] }
+    }
+  },
+  "scenes": [
+    { "template": "hook", "duration": 3, "kicker": "Contract tip #7", "text": "Your contract has a *trap* in clause 9." },
+    { "template": "tip", "duration": 5, "kicker": "Tip 7 of 30", "headline": ["Cap the", "*renewal price.*"],
+      "body": "Most vendor agreements let the price rise every year. Ask for a cap in writing before you sign.",
+      "note": "Clearclause flags uncapped increases automatically." },
+    { "template": "myth-fact", "duration": 5, "kicker": "Myth vs fact",
+      "myth": "A signed contract can't be changed.", "fact": "Most terms are *negotiable*, even after the first draft." },
+    { "template": "stat", "duration": 4, "theme": "sunrise", "kicker": "From our reviews",
+      "value": "12%", "label": "average yearly price increase hidden in vendor contracts.", "source": "Clearclause review data, 2026 (fictional)" },
+    { "template": "quote", "duration": 5,
+      "text": "We found a *three-year auto-renew* two days before it kicked in. Clearclause paid for itself that afternoon.",
+      "author": "Priya N.", "role": "Founder, a fictional studio", "image": "photo.jpg" },
+    { "template": "list", "duration": 5, "title": ["5 clauses to", "*read twice.*"],
+      "items": ["Auto-renewal", "Liability cap", "Termination notice", "Price escalation", "Governing law"] },
+    { "template": "versus", "duration": 5, "title": "Old way vs *Clearclause*",
+      "left": { "label": "Old way", "items": ["Two weeks with legal", "Jargon you can't parse", "Surprises at renewal"] },
+      "right": { "label": "Clearclause", "items": ["Minutes, not weeks", "Plain-English flags", "Reminders before renewal"] } },
+    { "template": "media", "duration": 4, "image": "photo.jpg", "headline": ["Know what", "*you sign.*"], "caption": "Free for your first three contracts." },
+    { "template": "end-card", "duration": 3.5, "tagline": "Know what you *sign.*", "cta": "Try it free", "fineprint": "Fictional brand · made with brandreel" }
+  ]
+}

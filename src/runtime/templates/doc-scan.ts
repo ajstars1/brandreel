@@ -1,5 +1,5 @@
 import { gsap } from 'gsap';
-import { fadeUp, h, headline, markup, revealLines } from '../dom.js';
+import { M, fadeUp, h, headline, markup, revealLines } from '../dom.js';
 import type { Template } from '../types.js';
 
 const ICON = { warn: '!', ok: '✓', bad: '×' } as const;
@@ -18,15 +18,15 @@ export const docScan: Template<'doc-scan'> = (root, scene) => {
     node.style.left = `${left}px`; node.style.top = `${top}px`;
     return node;
   });
-  const title = headline(scene.headline, 'h-lg');
+  const title = headline(scene.headline);
   const caption = scene.caption ? h('div', 'caption', markup(scene.caption)) : null;
   root.append(h('div', 'split reverse', h('div', 'copy', title.node, caption), h('div', 'visual doc-wrap', doc, ...flags)));
 
-  tl.from(doc, { y: 100, rotation: -4, opacity: 0, duration: .8, ease: 'power3.out' }, 0);
+  tl.from(doc, { y: 100, rotation: -4, opacity: 0, duration: M().enter, ease: M().ease }, 0);
   revealLines(tl, title.parts, .3, .2);
   if (caption) fadeUp(tl, caption, .9, 16);
   tl.fromTo(scanner, { y: -120 }, { y: 820, duration: 2.2, ease: 'sine.inOut' }, .7);
-  flags.forEach((flag, i) => tl.from(flag, { scale: .5, opacity: 0, x: -40, duration: .45, ease: 'back.out(1.8)' }, 1.0 + i * .55));
+  flags.forEach((flag, i) => tl.from(flag, { scale: .5, opacity: 0, x: -40, duration: .45, ease: M().pop }, 1.0 + i * .55));
   tl.to(flags, { y: i => (i % 2 ? -8 : 8), duration: 2.5, ease: 'sine.inOut' }, 1.0 + flags.length * .55);
   return tl;
 };
