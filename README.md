@@ -15,7 +15,8 @@ npx brandreel batch series.json --data tips.csv       # 30 rows → 30 reels
 - **16 templates, 4 style packs, custom themes.** The same script can look bold, editorial, soft or tech. Any scene can take its own colours.
 - **One script, every format.** Templates reflow for landscape, portrait and square, and keep text clear of the app controls on 9:16.
 - **Batch rendering.** A series is a script with `{{placeholders}}`; feed it a CSV or JSON and get a numbered set of videos.
-- **Optional writer.** `brandreel write "brief" --brand brand.json` has Claude draft the script from your brand kit's voice and facts, validated like any other script. The renderer itself never calls a model.
+- **Optional writer.** `brandreel write "brief" --brand brand.json` has Claude draft the script from your brand kit's voice and facts, validated like any other script. With `--custom` it may write bespoke scene code, which is linted, rendered and reviewed by the model before you see it. `brandreel look` drafts a brand's own style pack. The renderer itself never calls a model.
+- **Custom scenes and music.** When no template fits, a scene is one JS module with the same helpers the built-ins use. `brandreel music` renders a licence-free background bed in three moods.
 - **Frame-exact.** Scenes are HTML + [GSAP](https://gsap.com) timelines. The renderer seeks to every frame and screenshots it, so nothing is dropped or recorded in real time.
 - **Fast and local.** Frames are split across parallel headless Chrome workers and joined without re-encoding: a 33-second 1080p video renders in about a minute on 4 cores. Nothing is uploaded. You need Node 20+, FFmpeg, and Chrome or Chromium.
 
@@ -38,7 +39,9 @@ brandreel batch    <series.json> --data rows.csv|rows.json [--format ...] [--out
 brandreel preview  <video.json> [--port 4400] [--guides]     # live looping preview in the browser
 brandreel stills   <video.json> --at 1,4.5,9 [--guides]      # PNG frames for quick checks
 brandreel validate <video.json>                              # schema check with readable errors
-brandreel write    "<brief>" --brand brand.json [--kind reel|ad|explainer] [--length 15] [--stills]
+brandreel write    "<brief>" --brand brand.json [--kind reel|ad|explainer] [--length 15] [--stills] [--custom] [--qa 1]
+brandreel look     "<description>" --brand brand.json [--stills]   # a style pack of the brand's own
+brandreel music    --mood calm|upbeat|tech --seconds 15 -o bed.m4a  # licence-free background bed
 brandreel templates                                          # list scene templates
 brandreel styles                                             # list style packs
 ```
@@ -102,6 +105,30 @@ Every scene takes `duration` (seconds) and an optional `theme` (`light`, `dark`,
 | `doc-scan` | A document is scanned and findings pop out beside it | Analysis products |
 | `steps` | Headline beside a numbered path that fills in | How it works |
 | `end-card` | Logo lockup, tagline, call to action, fine print | Every ending |
+| `custom` | Your own scene: a JS module with the same helpers the built-ins use ([docs/custom-scenes.md](docs/custom-scenes.md)) | Hero moments |
+
+## Custom scenes
+
+When no template fits a moment, write the scene: one JavaScript module (plus optional CSS) that gets the same helpers the built-in templates use and returns a GSAP timeline.
+
+```jsonc
+{ "template": "custom", "duration": 5, "code": "scenes/orbit.js", "css": "scenes/orbit.css",
+  "props": { "headline": ["One place for", "*every clause.*"], "labels": ["Flags", "Questions", "Renewals"] } }
+```
+
+```js
+export default function orbit(root, api) {
+  const { gsap, h, headline, revealLines, brand, duration, motion, props } = api;
+  const tl = gsap.timeline();
+  root.classList.add('orbit');                       // scope your CSS under this class
+  const title = headline(props.headline);
+  root.append(h('div', 'split', h('div', 'copy', title.node), h('div', 'visual', /* … */)));
+  revealLines(tl, title.parts, .2);
+  return tl;                                         // seeked to every frame by the renderer
+}
+```
+
+`examples/clearclause/scenes/orbit.js` is a complete one (`npm run example:custom`). The contract, the helpers and the rules (deterministic, one file, scoped CSS) are in [docs/custom-scenes.md](docs/custom-scenes.md). Errors in a custom scene fail the render with the message, never a silent black frame.
 
 ## Themes and style packs
 
@@ -162,6 +189,22 @@ The prompt tells the model to use only the facts you listed, so numbers, plan na
 
 No API key? `--show-prompt` prints the exact prompt and reply shape to paste into any model, and `--from draft.json` imports the JSON it gives back through the same validation.
 
+### Letting it write scenes, and reviewing its own work
+
+```sh
+brandreel write "how a claim gets decided, with a diagram of the four gates" --brand brands/policygaido/brand.json --custom --qa 2
+```
+
+With `--custom` the model may add up to two custom scenes for moments the templates can't express (a diagram, a metaphor, a bespoke chart). Each one is checked against the custom-scene rules (no randomness, timers, network or imports), written to `drafts/<slug>/scene-N.js`, then rendered to stills at 25%, 60% and 95% of the scene. Those frames go back to the model with the code, and it returns either "ok" or complete replacements, for up to `--qa` rounds. A scene that throws at load time is reported the same way, so the model fixes its own syntax errors. You still get the last word: the stills are on disk next to the draft.
+
+### A look of the brand's own
+
+```sh
+brandreel look "warm, editorial, generous whitespace, thin rules, dawn colours" --brand brands/dawnwell/brand.json --stills
+```
+
+`look` asks the model for a CSS file that extends one of the four packs (tokens first, theme backgrounds second, selectors last) and up to three custom themes. It writes `look.css` next to the kit, updates the kit's `style` and `themes`, and with `--stills` renders a fixed six-scene sample (hook, tip, stat, list, chat, end-card) so you can judge it before using it.
+
 ## Batch: a series from a spreadsheet
 
 A series is a normal `video.json` with `{{placeholders}}`:
@@ -188,7 +231,15 @@ brandreel batch series/tips.json --data series/tips.csv --only 3,7-9  # a few ro
 
 Files are named by the row's `id`, `slug` or `name` column (or `--name "tip-{{n}}"`), else `row-01`, `row-02`, …. The CSV parser handles quotes, commas and newlines inside cells; a `.json` array of objects works too. Rows that fail validation are reported and skipped; the rest still render.
 
-The same mechanism makes ad variants: put three hooks and two calls to action in six rows and render them all for testing.
+The same mechanism makes ad variants: three hooks and two calls to action in six rows render six ads to test against each other. `brands/<name>/series/ad-variants.json` with an `id,kicker,hook,cta` CSV is all it takes.
+
+## Music
+
+```sh
+brandreel music --mood calm --seconds 12 -o music/calm-12s.m4a
+```
+
+A small deterministic synthesizer renders a background bed (chords, a soft beat, fades) in `calm`, `upbeat` or `tech`, so every video can have music with no licensing questions. Attach it with `"audio": { "src": "music/calm-12s.m4a", "volume": 0.55, "fadeIn": 0.4, "fadeOut": 1.8 }`; the same field takes any real track you own the rights to.
 
 ## How it works
 

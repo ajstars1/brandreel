@@ -5,7 +5,8 @@ import { parseArgs } from 'node:util';
 import Anthropic from '@anthropic-ai/sdk';
 import { writeFile, mkdir } from 'node:fs/promises';
 import { fillTemplate, loadRows, placeholders, rowName } from './batch.js';
-import { DEFAULT_MODEL, anthropicWriter, assemble, draftSchema, loadKit, relocateAssets, slugify, userPrompt, writeVideo, SYSTEM_PROMPT, type Kind, type Writer } from './write.js';
+import { MOODS, writeMusic, type Mood } from './music.js';
+import { DEFAULT_MODEL, anthropicWriter, applyLook, assemble, draftSchema, loadKit, lookPrompt, lookSample, relocateAssets, reviewCustomScenes, slugify, systemPrompt, userPrompt, writeLook, writeVideo, LOOK_SYSTEM, type Kind, type Writer } from './write.js';
 import { info, progress, warn } from './log.js';
 import { loadProject, loadProjectFrom, SpecError } from './load.js';
 import { totalDuration as videoLength } from './spec.js';
@@ -21,7 +22,9 @@ Usage
                      [--only 1,4-6] [--name "{{id}}"] [--dry-run]
   brandreel write    "<brief>" --brand brand.json [--kind reel|ad|explainer] [--length 15]
                      [--format ...] [--style ...] [--model claude-opus-5] [-o video.json] [--stills]
-                     [--show-prompt] [--from draft.json]
+                     [--custom] [--qa 1] [--show-prompt] [--from draft.json]
+  brandreel look     "<description>" --brand brand.json [--model ...] [--stills] [--show-prompt]
+  brandreel music    --mood calm|upbeat|tech --seconds 15 [--bpm 90] [--key C] [--seed 1] -o bed.m4a
   brandreel stills   <video.json> --at 1,4.5,9 [--out dir] [--format ...] [--guides]
   brandreel preview  <video.json> [--port 4400] [--format ...] [--guides]
   brandreel validate <video.json>
@@ -47,7 +50,8 @@ const TEMPLATE_HELP: Record<string, string> = {
   'quote': 'Testimonial or quote, revealed at speaking pace, with author',
   'list': '"Top 5": title beside items that arrive one at a time',
   'versus': 'Two columns, the old way vs the better way, with a VS badge',
-  'media': 'A photo with a slow push-in and the headline over a shade'
+  'media': 'A photo with a slow push-in and the headline over a shade',
+  'custom': 'Your own scene: a JS module with the same helpers the built-ins use (docs/custom-scenes.md)'
 };
 const STYLE_HELP: Record<string, string> = {
   bold: 'Big condensed headlines, deep shadows, snappy motion (default)',
@@ -82,10 +86,12 @@ async function write(brief: string | undefined, values: Values): Promise<number>
   const format = ((values['format'] as string | undefined) ?? (kind === 'reel' ? '9:16' : '16:9')) as FormatName;
   const seconds = Number(values['length'] ?? (kind === 'reel' ? 15 : kind === 'ad' ? 30 : 45));
   const style = values['style'] as StylePackName | undefined;
-  const input = { brief, kind: kind as Kind, format, seconds, style, kit };
+  const allowCustom = Boolean(values['custom']);
+  const rounds = values['qa'] !== undefined ? Number(values['qa']) : allowCustom ? 1 : 0;
+  const input = { brief, kind: kind as Kind, format, seconds, style, kit, allowCustom };
 
   if (values['show-prompt']) {
-    info(`--- system ---\n${SYSTEM_PROMPT}\n\n--- user ---\n${userPrompt(input)}\n\n--- reply shape ---\n{ "title": "...", "slug": "...", "scenes": [ { "template": "hook", "duration": 3, "text": "..." }, ... ] }`);
+    info(`--- system ---\n${systemPrompt(allowCustom)}\n\n--- user ---\n${userPrompt(input)}\n\n--- reply shape ---\n{ "title": "...", "slug": "...", "scenes": [ { "template": "hook", "duration": 3, "text": "..." }, ... ] }`);
     return 0;
   }
 
@@ -94,15 +100,23 @@ async function write(brief: string | undefined, values: Values): Promise<number>
     // A draft produced elsewhere (any model, or by hand): same coercion, validation and save path.
     const parsed = draftSchema.safeParse(JSON.parse(await readFile(String(values['from']), 'utf8')));
     if (!parsed.success) { warn(`${String(values['from'])} is not a draft: ${parsed.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).join('; ')}`); return 1; }
-    const { project, video } = await assemble(kit, dir, parsed.data, input, String(values['from']));
-    outcome = { project, video, draft: parsed.data, attempts: 0, usage: { input: 0, output: 0 } };
+    const { project, video, files } = await assemble(kit, dir, parsed.data, input, String(values['from']));
+    outcome = { project, video, draft: parsed.data, attempts: 0, usage: { input: 0, output: 0 }, files };
   } else {
     const model = (values['model'] as string | undefined) ?? DEFAULT_MODEL;
     try {
       // The client constructor throws when it finds no credentials at all; a wrong key fails later as AuthenticationError.
       const writer: Writer = anthropicWriter(model);
-      info(`Drafting a ${seconds}s ${kind} at ${format} with ${model}…`);
+      info(`Drafting a ${seconds}s ${kind} at ${format} with ${model}${allowCustom ? ', custom scenes allowed' : ''}…`);
       outcome = await writeVideo(writer, input, dir);
+      const customCount = outcome.draft.scenes.filter(scene => scene.template === 'custom').length;
+      if (customCount && rounds > 0) {
+        info(`Reviewing ${customCount} custom scene${customCount > 1 ? 's' : ''} (${rounds} round${rounds > 1 ? 's' : ''})…`);
+        const slug = slugify(outcome.draft.slug || outcome.draft.title);
+        const review = await reviewCustomScenes(writer, outcome, { rounds, stills: renderStills, directory: path.join(dir, 'drafts', slug, 'review'), input, kit, kitDir: dir });
+        review.notes.forEach(note => info(`  ${note}`));
+        outcome = review.outcome;
+      }
     } catch (error) {
       // A missing key surfaces as a plain error from the SDK's credential resolver; a wrong key as AuthenticationError.
       const noCredentials = error instanceof Anthropic.AuthenticationError || (error instanceof Error && !(error instanceof Anthropic.APIError) && /authentication method|API_KEY|api key|credential/i.test(error.message));
@@ -121,7 +135,9 @@ async function write(brief: string | undefined, values: Values): Promise<number>
   info(`✓ ${outcome.draft.title}  (${scenes.length} scenes, ${videoLength(outcome.project.video).toFixed(1)}s${outcome.attempts ? `, ${outcome.attempts} draft${outcome.attempts > 1 ? 's' : ''}, ${outcome.usage.input + outcome.usage.output} tokens` : ''})`);
   scenes.forEach((scene, index) => {
     const record = scene as unknown as Record<string, unknown>;
-    const first = ['text', 'headline', 'lines', 'title', 'tagline', 'before', 'myth', 'value', 'question', 'docTitle'].map(key => record[key]).find(value => typeof value === 'string' || Array.isArray(value))
+    const saved = (outcome.video['scenes'] as Record<string, unknown>[] | undefined)?.[index];
+    const first = scene.template === 'custom' ? `custom scene (${String(saved?.['code'] ?? scene.code)})`
+      : ['text', 'headline', 'lines', 'title', 'tagline', 'before', 'myth', 'value', 'question', 'docTitle'].map(key => record[key]).find(value => typeof value === 'string' || Array.isArray(value))
       ?? Object.entries(record).find(([key, value]) => !['template', 'duration', 'theme'].includes(key) && typeof value === 'string')?.[1];
     const preview = Array.isArray(first) ? first.join(' / ') : typeof first === 'string' ? first : '';
     info(`  ${String(index + 1).padStart(2)}. ${scene.template.padEnd(12)} ${scene.duration.toFixed(1).padStart(4)}s  ${preview.slice(0, 70)}`);
@@ -137,6 +153,41 @@ async function write(brief: string | undefined, values: Values): Promise<number>
   return 0;
 }
 
+// look: a description of the look → look.css + themes in the brand kit (+ sample stills)
+async function look(description: string | undefined, values: Values): Promise<number> {
+  const kitPath = values['brand'] as string | undefined;
+  if (!description || !kitPath) { warn('Usage: brandreel look "<description of the look>" --brand brands/<name>/brand.json'); return 1; }
+  const { kit, dir } = await loadKit(kitPath);
+  if (values['show-prompt']) { info(`--- system ---\n${LOOK_SYSTEM}\n\n--- user ---\n${lookPrompt(kit, description)}`); return 0; }
+  const model = (values['model'] as string | undefined) ?? DEFAULT_MODEL;
+  let result;
+  try {
+    const writer: Writer = anthropicWriter(model);
+    info(`Designing a look for ${(kit as { brand?: { name?: string } }).brand?.name ?? 'the brand'} with ${model}…`);
+    result = await writeLook(writer, kit, description);
+  } catch (error) {
+    const noCredentials = error instanceof Anthropic.AuthenticationError || (error instanceof Error && !(error instanceof Anthropic.APIError) && /authentication method|API_KEY|api key|credential/i.test(error.message));
+    if (noCredentials) { warn('No Anthropic credentials. Set ANTHROPIC_API_KEY (or run `ant auth login`).'); return 1; }
+    if (error instanceof Anthropic.APIError) { warn(`API error ${error.status ?? ''}: ${error.message}`); return 1; }
+    throw error;
+  }
+  const cssFile = path.join(dir, 'look.css');
+  await writeFile(cssFile, result.look.css.endsWith('\n') ? result.look.css : `${result.look.css}\n`);
+  const nextKit = applyLook(kit, result.look);
+  await writeFile(path.resolve(kitPath), JSON.stringify(nextKit, null, 2) + '\n');
+  info(`✓ look.css written and ${kitPath} updated (style: ${result.look.extends} + look.css${result.look.themes.length ? `, themes: ${result.look.themes.map(theme => theme.name).join(', ')}` : ''}; ${result.usage.input + result.usage.output} tokens)`);
+  info(`  ${result.look.notes}`);
+  if (values['stills']) {
+    const sample = lookSample(nextKit);
+    const { project } = await assemble(nextKit, dir, sample, { format: (values['format'] as FormatName | undefined) ?? '9:16' }, 'look sample');
+    let at = 0;
+    const times = sample.scenes.map(scene => { const mid = at + scene.duration * .6; at += scene.duration; return Number(mid.toFixed(2)); });
+    const files = await renderStills(project, times, path.join(dir, 'drafts', 'look-sample'));
+    info(`Sample stills: ${path.dirname(files[0] ?? '')}`);
+  }
+  return 0;
+}
+
 async function main(): Promise<number> {
   const { positionals, values } = parseArgs({
     allowPositionals: true,
@@ -145,13 +196,25 @@ async function main(): Promise<number> {
       at: { type: 'string' }, out: { type: 'string' }, port: { type: 'string' }, guides: { type: 'boolean' },
       data: { type: 'string' }, only: { type: 'string' }, name: { type: 'string' }, 'dry-run': { type: 'boolean' },
       brand: { type: 'string' }, kind: { type: 'string' }, length: { type: 'string' }, model: { type: 'string' },
-      stills: { type: 'boolean' }, 'show-prompt': { type: 'boolean' }, from: { type: 'string' },
+      mood: { type: 'string' }, seconds: { type: 'string' }, bpm: { type: 'string' }, key: { type: 'string' }, seed: { type: 'string' },
+      stills: { type: 'boolean' }, 'show-prompt': { type: 'boolean' }, from: { type: 'string' }, custom: { type: 'boolean' }, qa: { type: 'string' },
       help: { type: 'boolean', short: 'h' }
     }
   });
   const [command, spec] = positionals;
   if (!command || values.help) { info(HELP); return 0; }
   if (command === 'write') return write(spec, values);
+  if (command === 'look') return look(spec, values);
+  if (command === 'music') {
+    const mood = (values.mood ?? 'calm') as Mood;
+    if (!MOODS.includes(mood)) { warn(`--mood must be one of ${MOODS.join(', ')}.`); return 1; }
+    const seconds = Number(values.seconds ?? 15);
+    if (!(seconds > 0 && seconds <= 600)) { warn('--seconds must be between 1 and 600.'); return 1; }
+    const output = values.output ?? `music/${mood}-${seconds}s.m4a`;
+    await writeMusic({ mood, seconds, bpm: values.bpm ? Number(values.bpm) : undefined, key: values.key, seed: values.seed ? Number(values.seed) : undefined }, output);
+    info(`✓ ${output}  (${mood}, ${seconds}s). Add to a video: "audio": { "src": "${output}", "volume": 0.6 }`);
+    return 0;
+  }
   if (command === 'templates') {
     for (const [name, description] of Object.entries(TEMPLATE_HELP)) info(`  ${name.padEnd(12)} ${description}`);
     return 0;

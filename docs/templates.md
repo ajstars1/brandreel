@@ -71,6 +71,14 @@ Every scene has `template`, `duration` (seconds, up to 60) and an optional `them
 | `headline` | lines | Over a shade at the bottom |
 | `caption` | string, markup, optional | |
 
+### custom · `light`
+
+| Field | Type | |
+|---|---|---|
+| `code` | path | A JS module: `export default function (root, api) { …; return timeline }`. See [custom-scenes.md](custom-scenes.md). |
+| `css` | path, optional | Styles, scoped under a class the module adds to `root` |
+| `props` | object | Passed to the module untouched |
+
 ## Long-form (launch films, ads)
 
 ### statement · `dark`

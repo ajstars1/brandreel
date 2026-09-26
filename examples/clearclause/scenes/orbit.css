@@ -1,0 +1,10 @@
+/* Scoped to .orbit, the class the module adds to its scene root. Design pixels: short side = 1080. */
+.orbit .orbit-stage { position: relative; width: 640px; height: 640px; }
+.orbit .orbit-ring { position: absolute; inset: 60px; border-radius: 50%; border: 3px dashed var(--rule); }
+.orbit .orbit-core { position: absolute; left: 50%; top: 50%; width: 200px; height: 200px; margin: -100px 0 0 -100px; border-radius: 50px; background: var(--surface); box-shadow: var(--shadow-card); display: grid; place-items: center; }
+.orbit .orbit-core img { width: 130px; height: 130px; object-fit: contain; }
+.orbit .orbit-dot { width: 80px; height: 80px; border-radius: 50%; background: var(--primary); }
+.orbit .orbit-chip { position: absolute; left: 50%; top: 50%; padding: 18px 30px; border-radius: var(--radius-pill); background: var(--primary); color: #fff; font-size: 30px; font-weight: 600; white-space: nowrap;
+  transform: translate(-50%, -50%) rotate(var(--angle)) translateY(-260px) rotate(calc(-1 * var(--angle))); }
+.portrait .orbit .orbit-stage { width: 560px; height: 560px; }
+.portrait .orbit .orbit-chip { transform: translate(-50%, -50%) rotate(var(--angle)) translateY(-230px) rotate(calc(-1 * var(--angle))); }

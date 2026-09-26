@@ -29,6 +29,10 @@ Rules of thumb:
 - Put entrances in the first 2 to 3 seconds and add a slow drift so held frames never look frozen. The runtime speeds up a timeline that is longer than its scene.
 - Build text with `markup()` or `headline()` so `*accent*` works everywhere, and let `sizeFor()` pick headline sizes.
 
+## Custom scenes vs. new templates
+
+If a scene is useful to one brand, write it as a custom scene (`docs/custom-scenes.md`) and keep it in that brand's folder. Promote it to a built-in template only when a second brand wants it; the template then gets a schema, a default theme and docs like the others.
+
 ## Adding a style pack
 
 1. Add the name, its motion preset and default transition to `STYLE_PACKS` in `src/constants.ts`.

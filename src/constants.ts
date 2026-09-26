@@ -6,7 +6,8 @@ export type FormatName = keyof typeof FORMATS;
 
 export type TemplateId =
   | 'statement' | 'strike' | 'logo-reveal' | 'chat' | 'counter' | 'doc-scan' | 'steps' | 'end-card'
-  | 'hook' | 'tip' | 'myth-fact' | 'stat' | 'quote' | 'list' | 'versus' | 'media';
+  | 'hook' | 'tip' | 'myth-fact' | 'stat' | 'quote' | 'list' | 'versus' | 'media'
+  | 'custom';
 
 // Built-in themes are derived from the brand colours. Custom themes are declared in video.json.
 export const BUILTIN_THEMES = ['light', 'dark', 'brand'] as const;
@@ -17,7 +18,8 @@ export const DEFAULT_THEME: Record<TemplateId, BuiltinTheme> = {
   'statement': 'dark', 'strike': 'light', 'logo-reveal': 'brand', 'chat': 'light',
   'counter': 'dark', 'doc-scan': 'light', 'steps': 'brand', 'end-card': 'light',
   'hook': 'dark', 'tip': 'light', 'myth-fact': 'light', 'stat': 'brand',
-  'quote': 'light', 'list': 'light', 'versus': 'light', 'media': 'dark'
+  'quote': 'light', 'list': 'light', 'versus': 'light', 'media': 'dark',
+  'custom': 'light'
 };
 
 // How things move. Every template reads these instead of hardcoding its own numbers, so a

@@ -3,6 +3,7 @@ import { BUILTIN_THEMES, DEFAULT_THEME, SAFE_AREA, STYLE_PACKS, dimensions } fro
 import type { Brand, Scene, TemplateName, Theme, Video } from '../spec.js';
 import { h, img, setMotion } from './dom.js';
 import { TEMPLATES } from './templates/index.js';
+import { loadCustomModules } from './templates/custom.js';
 import type { Layout, SceneContext, Template } from './types.js';
 import type {} from '../page-api.js';
 
@@ -144,6 +145,14 @@ async function start(): Promise<void> {
   stage.style.setProperty('--safe-top', `${safe.top}px`); stage.style.setProperty('--safe-bottom', `${safe.bottom}px`);
   document.body.append(stage);
   applyBrand(stage, video.brand);
+  const customScenes = video.scenes.filter(scene => scene.template === 'custom');
+  await Promise.all(customScenes.flatMap(scene => scene.css ? [new Promise<void>((resolve, reject) => {
+    const link = h('link') as HTMLLinkElement;
+    link.rel = 'stylesheet'; link.href = scene.css as string;
+    link.onload = () => resolve(); link.onerror = () => reject(new Error(`${scene.css}: stylesheet failed to load`));
+    document.head.append(link);
+  })] : []));
+  await loadCustomModules(customScenes.map(scene => scene.code));
   const master = build(video, stage, layout);
   if (params.has('guides')) stage.append(h('div', 'guides'));
   await whenLoaded(stage);

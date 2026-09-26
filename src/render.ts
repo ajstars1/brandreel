@@ -104,7 +104,7 @@ export async function renderVideo(project: Project, options: RenderOptions): Pro
     if (audio) {
       const fadeStart = Math.max(0, duration - audio.fadeOut);
       args.push('-i', audio.file, '-map', '0:v', '-map', '1:a', '-c:v', 'copy', '-c:a', 'aac', '-b:a', '192k',
-        '-af', `volume=${audio.volume},afade=t=out:st=${fadeStart}:d=${audio.fadeOut}`, '-t', String(duration));
+        '-af', `volume=${audio.volume},afade=t=in:st=0:d=${Math.max(.01, audio.fadeIn)},afade=t=out:st=${fadeStart}:d=${Math.max(.01, audio.fadeOut)}`, '-t', String(duration));
     } else {
       args.push('-c', 'copy');
     }

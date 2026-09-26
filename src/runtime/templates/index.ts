@@ -2,6 +2,7 @@ import type { TemplateName } from '../../spec.js';
 import type { Template } from '../types.js';
 import { chat } from './chat.js';
 import { counter } from './counter.js';
+import { custom } from './custom.js';
 import { docScan } from './doc-scan.js';
 import { endCard } from './end-card.js';
 import { hook } from './hook.js';
@@ -33,5 +34,6 @@ export const TEMPLATES: { [K in TemplateName]: Template<K> } = {
   'quote': quote,
   'list': list,
   'versus': versus,
-  'media': media
+  'media': media,
+  'custom': custom
 };

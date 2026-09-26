@@ -159,9 +159,17 @@ const media = z.object({
   caption: z.string().optional()
 });
 
+// A scene written in code: a JS module (see docs/custom-scenes.md) with optional CSS and props.
+const custom = z.object({
+  template: z.literal('custom'), ...base,
+  code: text,
+  css: z.string().optional(),
+  props: z.record(z.string(), z.unknown()).default({})
+});
+
 export const sceneSchema = z.discriminatedUnion('template', [
   statement, strike, logoReveal, chat, counter, docScan, steps, endCard,
-  hook, tip, mythFact, stat, quote, list, versus, media
+  hook, tip, mythFact, stat, quote, list, versus, media, custom
 ]);
 
 export const videoSchema = z.object({
@@ -173,7 +181,7 @@ export const videoSchema = z.object({
   watermark: z.boolean().optional(),                        // defaults to true when the brand has a handle
   progressBar: z.boolean().default(false),
   safeArea: z.boolean().default(true),                      // keep text clear of app controls on 9:16
-  audio: z.object({ src: text, volume: z.number().min(0).max(2).default(1), fadeOut: z.number().min(0).max(10).default(1.5) }).optional(),
+  audio: z.object({ src: text, volume: z.number().min(0).max(2).default(1), fadeIn: z.number().min(0).max(10).default(.4), fadeOut: z.number().min(0).max(10).default(1.5) }).optional(),
   brand: brandSchema,
   scenes: z.array(sceneSchema).min(1)
 }).superRefine((video, context) => {

@@ -20,7 +20,8 @@
     "test": "vitest run",
     "example": "npm run build && node dist/cli.js render examples/acme/video.json",
     "prepublishOnly": "npm run build && npm test",
-    "example:reel": "npm run build && node dist/cli.js render examples/clearclause/reel.json"
+    "example:reel": "npm run build && node dist/cli.js render examples/clearclause/reel.json",
+    "example:custom": "npm run build && node dist/cli.js render examples/clearclause/custom.json"
   },
   "keywords": [
     "video",

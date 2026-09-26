@@ -8,7 +8,7 @@ import { parseVideo, type FormatName, type StylePackName, type Video } from './s
 export interface Project {
   video: Video;
   assets: Map<string, string>;
-  audio?: { file: string; volume: number; fadeOut: number };
+  audio?: { file: string; volume: number; fadeIn: number; fadeOut: number };
   label: string;
 }
 
@@ -68,13 +68,17 @@ export async function loadProjectFrom(raw: unknown, baseDir: string, label: stri
   if (video.style.css) video.style.css = await register(video.style.css, 'Style CSS');
   for (const scene of video.scenes) {
     if ('image' in scene && scene.image) scene.image = await register(scene.image, 'Image');
+    if (scene.template === 'custom') {
+      scene.code = await register(scene.code, 'Scene code');
+      if (scene.css) scene.css = await register(scene.css, 'Scene CSS');
+    }
   }
   let audio: Project['audio'];
   if (video.audio) {
     if (isRemote(video.audio.src)) throw new SpecError('audio.src must be a local file');
     const file = path.resolve(baseDir, video.audio.src);
     try { await stat(file); } catch { throw new SpecError(`Audio not found: ${video.audio.src}`); }
-    audio = { file, volume: video.audio.volume, fadeOut: video.audio.fadeOut };
+    audio = { file, volume: video.audio.volume, fadeIn: video.audio.fadeIn, fadeOut: video.audio.fadeOut };
   }
   return { video, assets, audio, label };
 }

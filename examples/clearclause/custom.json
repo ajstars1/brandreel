@@ -1,0 +1,18 @@
+{
+  "format": "16:9",
+  "brand": {
+    "name": "Clearclause", "handle": "@clearclause", "logo": "logo.svg",
+    "colors": { "primary": "#1f5eff", "primaryDark": "#0b1f66", "accent": "#7fb2ff", "highlight": "#c6f36b", "ink": "#0f1424", "paper": "#f8f9fc", "night": "#060a1a" },
+    "fonts": {
+      "display": { "family": "Anton", "uppercase": true, "files": [{ "src": "fonts/Anton.woff2", "weight": 400 }] },
+      "body": { "family": "Poppins", "files": [{ "src": "fonts/Poppins-Regular.woff2", "weight": 400 }, { "src": "fonts/Poppins-SemiBold.woff2", "weight": 600 }, { "src": "fonts/Poppins-Bold.woff2", "weight": 700 }] },
+      "accent": { "family": "Instrument Serif", "files": [{ "src": "fonts/InstrumentSerif-Italic.woff2", "weight": 400, "style": "italic" }] }
+    }
+  },
+  "scenes": [
+    { "template": "logo-reveal", "duration": 3, "tagline": "Contract review for everyone." },
+    { "template": "custom", "duration": 5, "code": "scenes/orbit.js", "css": "scenes/orbit.css",
+      "props": { "headline": ["One place for", "*every clause.*"], "caption": "Flags, questions and renewal reminders, together.", "labels": ["Flags", "Questions", "Renewals"] } },
+    { "template": "end-card", "duration": 3.5, "tagline": "Know what you *sign.*", "cta": "Try it free" }
+  ]
+}
