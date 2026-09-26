@@ -41,5 +41,13 @@
     "@types/node": "^26.6.3",
     "typescript": "^5.9.3",
     "vitest": "^5.0.2"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ajstars1/brandreel.git"
+  },
+  "homepage": "https://github.com/ajstars1/brandreel#readme",
+  "bugs": {
+    "url": "https://github.com/ajstars1/brandreel/issues"
   }
 }

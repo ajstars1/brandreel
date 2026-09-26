@@ -21,7 +21,7 @@ npx brandreel render video.json --format 9:16   # same script, Reels/Shorts layo
 ## Quick start
 
 ```sh
-git clone https://github.com/<you>/brandreel && cd brandreel
+git clone https://github.com/ajstars1/brandreel && cd brandreel
 npm install
 npm run example          # renders examples/clearclause/video.json
 ```
