@@ -2,9 +2,13 @@
 import path from 'node:path';
 import { readFile } from 'node:fs/promises';
 import { parseArgs } from 'node:util';
+import Anthropic from '@anthropic-ai/sdk';
+import { writeFile, mkdir } from 'node:fs/promises';
 import { fillTemplate, loadRows, placeholders, rowName } from './batch.js';
+import { DEFAULT_MODEL, anthropicWriter, assemble, draftSchema, loadKit, relocateAssets, slugify, userPrompt, writeVideo, SYSTEM_PROMPT, type Kind, type Writer } from './write.js';
 import { info, progress, warn } from './log.js';
 import { loadProject, loadProjectFrom, SpecError } from './load.js';
+import { totalDuration as videoLength } from './spec.js';
 import { renderStills, renderVideo } from './render.js';
 import { startServer } from './server.js';
 import { FORMATS, STYLE_PACK_NAMES, totalDuration, type FormatName, type StylePackName } from './spec.js';
@@ -15,13 +19,17 @@ Usage
   brandreel render   <video.json> [-o out.mp4] [--format 16:9|9:16|1:1|4:5] [--style bold|editorial|soft|tech] [--workers N]
   brandreel batch    <series.json> --data rows.csv|rows.json [--format ...] [--out dir]
                      [--only 1,4-6] [--name "{{id}}"] [--dry-run]
+  brandreel write    "<brief>" --brand brand.json [--kind reel|ad|explainer] [--length 15]
+                     [--format ...] [--style ...] [--model claude-opus-5] [-o video.json] [--stills]
+                     [--show-prompt] [--from draft.json]
   brandreel stills   <video.json> --at 1,4.5,9 [--out dir] [--format ...] [--guides]
   brandreel preview  <video.json> [--port 4400] [--format ...] [--guides]
   brandreel validate <video.json>
   brandreel templates
   brandreel styles
 
-Needs FFmpeg on PATH and Chrome/Chromium (or BRANDREEL_CHROME=/path/to/chrome).`;
+Needs FFmpeg on PATH and Chrome/Chromium (or BRANDREEL_CHROME=/path/to/chrome).
+"write" needs ANTHROPIC_API_KEY (or an \`ant auth login\` profile); without one, use --show-prompt and --from.`;
 
 const TEMPLATE_HELP: Record<string, string> = {
   'statement': 'Bold headline lines, optionally beside a card that gets stamped',
@@ -61,6 +69,74 @@ const parseOnly = (value: string, count: number): number[] => {
 
 const seconds = (ms: number): string => `${(ms / 1000).toFixed(0)}s`;
 
+type Values = Record<string, string | boolean | undefined>;
+
+// write: brief + brand kit → Claude drafts scenes → validated video.json (+ optional stills)
+async function write(brief: string | undefined, values: Values): Promise<number> {
+  const kitPath = values['brand'] as string | undefined;
+  if (!brief || !kitPath) { warn('Usage: brandreel write "<brief>" --brand brands/<name>/brand.json'); return 1; }
+  const kind = (values['kind'] as string | undefined) ?? 'reel';
+  if (!['reel', 'ad', 'explainer'].includes(kind)) { warn(`--kind must be reel, ad or explainer, not ${kind}.`); return 1; }
+  if (values['format'] && !(String(values['format']) in FORMATS)) { warn(`Unknown format ${String(values['format'])}. Use ${Object.keys(FORMATS).join(', ')}.`); return 1; }
+  const { kit, dir } = await loadKit(kitPath);
+  const format = ((values['format'] as string | undefined) ?? (kind === 'reel' ? '9:16' : '16:9')) as FormatName;
+  const seconds = Number(values['length'] ?? (kind === 'reel' ? 15 : kind === 'ad' ? 30 : 45));
+  const style = values['style'] as StylePackName | undefined;
+  const input = { brief, kind: kind as Kind, format, seconds, style, kit };
+
+  if (values['show-prompt']) {
+    info(`--- system ---\n${SYSTEM_PROMPT}\n\n--- user ---\n${userPrompt(input)}\n\n--- reply shape ---\n{ "title": "...", "slug": "...", "scenes": [ { "template": "hook", "duration": 3, "text": "..." }, ... ] }`);
+    return 0;
+  }
+
+  let outcome;
+  if (values['from']) {
+    // A draft produced elsewhere (any model, or by hand): same coercion, validation and save path.
+    const parsed = draftSchema.safeParse(JSON.parse(await readFile(String(values['from']), 'utf8')));
+    if (!parsed.success) { warn(`${String(values['from'])} is not a draft: ${parsed.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`).join('; ')}`); return 1; }
+    const { project, video } = await assemble(kit, dir, parsed.data, input, String(values['from']));
+    outcome = { project, video, draft: parsed.data, attempts: 0, usage: { input: 0, output: 0 } };
+  } else {
+    const model = (values['model'] as string | undefined) ?? DEFAULT_MODEL;
+    try {
+      // The client constructor throws when it finds no credentials at all; a wrong key fails later as AuthenticationError.
+      const writer: Writer = anthropicWriter(model);
+      info(`Drafting a ${seconds}s ${kind} at ${format} with ${model}…`);
+      outcome = await writeVideo(writer, input, dir);
+    } catch (error) {
+      // A missing key surfaces as a plain error from the SDK's credential resolver; a wrong key as AuthenticationError.
+      const noCredentials = error instanceof Anthropic.AuthenticationError || (error instanceof Error && !(error instanceof Anthropic.APIError) && /authentication method|API_KEY|api key|credential/i.test(error.message));
+      if (noCredentials) { warn('No Anthropic credentials. Set ANTHROPIC_API_KEY (or run `ant auth login`), or draft with any model using --show-prompt and import the JSON with --from.'); return 1; }
+      if (error instanceof Anthropic.RateLimitError) { warn('Rate limited by the API. Try again in a minute.'); return 1; }
+      if (error instanceof Anthropic.APIError) { warn(`API error ${error.status ?? ''}: ${error.message}`); return 1; }
+      throw error;
+    }
+  }
+
+  const slug = slugify(outcome.draft.slug || outcome.draft.title);
+  const output = (values['output'] as string | undefined) ?? path.join(dir, 'drafts', `${slug}.json`);
+  await mkdir(path.dirname(path.resolve(output)), { recursive: true });
+  await writeFile(output, JSON.stringify(relocateAssets(outcome.video, dir, path.dirname(path.resolve(output))), null, 2) + '\n');
+  const scenes = outcome.project.video.scenes;
+  info(`✓ ${outcome.draft.title}  (${scenes.length} scenes, ${videoLength(outcome.project.video).toFixed(1)}s${outcome.attempts ? `, ${outcome.attempts} draft${outcome.attempts > 1 ? 's' : ''}, ${outcome.usage.input + outcome.usage.output} tokens` : ''})`);
+  scenes.forEach((scene, index) => {
+    const record = scene as unknown as Record<string, unknown>;
+    const first = ['text', 'headline', 'lines', 'title', 'tagline', 'before', 'myth', 'value', 'question', 'docTitle'].map(key => record[key]).find(value => typeof value === 'string' || Array.isArray(value))
+      ?? Object.entries(record).find(([key, value]) => !['template', 'duration', 'theme'].includes(key) && typeof value === 'string')?.[1];
+    const preview = Array.isArray(first) ? first.join(' / ') : typeof first === 'string' ? first : '';
+    info(`  ${String(index + 1).padStart(2)}. ${scene.template.padEnd(12)} ${scene.duration.toFixed(1).padStart(4)}s  ${preview.slice(0, 70)}`);
+  });
+  info(`→ ${output}`);
+  if (values['stills']) {
+    let at = 0;
+    const times = scenes.map(scene => { const mid = at + scene.duration * .6; at += scene.duration; return Number(mid.toFixed(2)); });
+    const files = await renderStills(outcome.project, times, path.join(path.dirname(path.resolve(output)), slug));
+    info(`Stills: ${path.dirname(files[0] ?? '')}`);
+  }
+  info(`Next: brandreel preview ${output}   ·   brandreel render ${output}`);
+  return 0;
+}
+
 async function main(): Promise<number> {
   const { positionals, values } = parseArgs({
     allowPositionals: true,
@@ -68,11 +144,14 @@ async function main(): Promise<number> {
       output: { type: 'string', short: 'o' }, format: { type: 'string' }, style: { type: 'string' }, workers: { type: 'string' },
       at: { type: 'string' }, out: { type: 'string' }, port: { type: 'string' }, guides: { type: 'boolean' },
       data: { type: 'string' }, only: { type: 'string' }, name: { type: 'string' }, 'dry-run': { type: 'boolean' },
+      brand: { type: 'string' }, kind: { type: 'string' }, length: { type: 'string' }, model: { type: 'string' },
+      stills: { type: 'boolean' }, 'show-prompt': { type: 'boolean' }, from: { type: 'string' },
       help: { type: 'boolean', short: 'h' }
     }
   });
   const [command, spec] = positionals;
   if (!command || values.help) { info(HELP); return 0; }
+  if (command === 'write') return write(spec, values);
   if (command === 'templates') {
     for (const [name, description] of Object.entries(TEMPLATE_HELP)) info(`  ${name.padEnd(12)} ${description}`);
     return 0;

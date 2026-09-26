@@ -15,6 +15,7 @@ npx brandreel batch series.json --data tips.csv       # 30 rows → 30 reels
 - **16 templates, 4 style packs, custom themes.** The same script can look bold, editorial, soft or tech. Any scene can take its own colours.
 - **One script, every format.** Templates reflow for landscape, portrait and square, and keep text clear of the app controls on 9:16.
 - **Batch rendering.** A series is a script with `{{placeholders}}`; feed it a CSV or JSON and get a numbered set of videos.
+- **Optional writer.** `brandreel write "brief" --brand brand.json` has Claude draft the script from your brand kit's voice and facts, validated like any other script. The renderer itself never calls a model.
 - **Frame-exact.** Scenes are HTML + [GSAP](https://gsap.com) timelines. The renderer seeks to every frame and screenshots it, so nothing is dropped or recorded in real time.
 - **Fast and local.** Frames are split across parallel headless Chrome workers and joined without re-encoding: a 33-second 1080p video renders in about a minute on 4 cores. Nothing is uploaded. You need Node 20+, FFmpeg, and Chrome or Chromium.
 
@@ -37,6 +38,7 @@ brandreel batch    <series.json> --data rows.csv|rows.json [--format ...] [--out
 brandreel preview  <video.json> [--port 4400] [--guides]     # live looping preview in the browser
 brandreel stills   <video.json> --at 1,4.5,9 [--guides]      # PNG frames for quick checks
 brandreel validate <video.json>                              # schema check with readable errors
+brandreel write    "<brief>" --brand brand.json [--kind reel|ad|explainer] [--length 15] [--stills]
 brandreel templates                                          # list scene templates
 brandreel styles                                             # list style packs
 ```
@@ -127,6 +129,38 @@ Portrait videos keep text out of the bands where Instagram, YouTube and TikTok d
 - `brand.handle` adds a small watermark pill on every scene (disable with `"watermark": false`).
 - `"progressBar": true` fills a thin bar over the length of the video.
 - `hook` → `tip` → `end-card` at 9:16 is an 11-second reel. Add `audio` for music.
+
+## Write the script with Claude
+
+brandreel itself is deterministic: the same JSON always renders the same video. The one place a model fits is writing the JSON, and `write` does that:
+
+```sh
+export ANTHROPIC_API_KEY=...          # or `ant auth login`
+brandreel write "3 things to check before renewing a health plan" --brand brands/policygaido/brand.json --kind reel --stills
+brandreel write "30-second launch ad for the pilot programme" --brand brands/dawnwell/brand.json --kind ad --format 16:9
+```
+
+A **brand kit** (`brand.json`) is a `video.json` without `scenes`, plus two sections the writer reads:
+
+```jsonc
+{
+  "brand": { ... }, "style": "bold", "themes": { ... },      // exactly as in video.json
+  "voice": {
+    "audience": "Indian families buying health insurance, often for parents",
+    "tone": "plain, direct, on the customer's side",
+    "rules": ["Never use em dashes", "Never promise a claim will be paid"],
+    "cta": "Ask GaidoAI at policygaido.com",
+    "avoid": ["fear-mongering", "'guaranteed'"]
+  },
+  "facts": ["Compares 200+ health insurance plans", "Free advice, no spam calls"]
+}
+```
+
+Claude (`claude-opus-5` by default, `--model` to change) gets the template reference, the writing rules, your voice and facts, and the brief, and returns the scenes as structured output. The draft is validated exactly like a hand-written script; if it fails, the errors go back to the model for a repair round. The result lands in `<kit dir>/drafts/<slug>.json`, ready for `preview`, `stills` and `render`. `--stills` renders one frame per scene straight away so you can approve it by eye.
+
+The prompt tells the model to use only the facts you listed, so numbers, plan names and testimonials are never invented. Check the copy anyway before you publish; it is your brand.
+
+No API key? `--show-prompt` prints the exact prompt and reply shape to paste into any model, and `--from draft.json` imports the JSON it gives back through the same validation.
 
 ## Batch: a series from a spreadsheet
 

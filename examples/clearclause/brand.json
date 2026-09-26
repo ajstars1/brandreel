@@ -1,0 +1,87 @@
+{
+  "fps": 30,
+  "style": "bold",
+  "themes": {
+    "sunrise": {
+      "background": [
+        "#ffd48a",
+        "#ff8f6b"
+      ],
+      "text": "#141627",
+      "em": "#0b1f66"
+    }
+  },
+  "brand": {
+    "name": "Clearclause",
+    "handle": "@clearclause",
+    "logo": "logo.svg",
+    "colors": {
+      "primary": "#1f5eff",
+      "primaryDark": "#0b1f66",
+      "accent": "#7fb2ff",
+      "highlight": "#c6f36b",
+      "ink": "#0f1424",
+      "paper": "#f8f9fc",
+      "night": "#060a1a"
+    },
+    "fonts": {
+      "display": {
+        "family": "Anton",
+        "uppercase": true,
+        "files": [
+          {
+            "src": "fonts/Anton.woff2",
+            "weight": 400
+          }
+        ]
+      },
+      "body": {
+        "family": "Poppins",
+        "files": [
+          {
+            "src": "fonts/Poppins-Regular.woff2",
+            "weight": 400
+          },
+          {
+            "src": "fonts/Poppins-SemiBold.woff2",
+            "weight": 600
+          },
+          {
+            "src": "fonts/Poppins-Bold.woff2",
+            "weight": 700
+          }
+        ]
+      },
+      "accent": {
+        "family": "Instrument Serif",
+        "files": [
+          {
+            "src": "fonts/InstrumentSerif-Italic.woff2",
+            "weight": 400,
+            "style": "italic"
+          }
+        ]
+      }
+    }
+  },
+  "voice": {
+    "audience": "Founders and ops leads at small companies who sign vendor contracts without a lawyer",
+    "tone": "confident, friendly, a little wry; short sentences",
+    "rules": [
+      "Never use em dashes",
+      "Do not invent statistics; this is a fictional brand, keep numbers obviously illustrative",
+      "No legal advice; Clearclause flags clauses, a lawyer decides"
+    ],
+    "cta": "Try it free at clearclause.example",
+    "avoid": [
+      "fear-mongering",
+      "legalese"
+    ]
+  },
+  "facts": [
+    "Clearclause is a fictional contract review product used as the brandreel example",
+    "Drop in any contract; risky clauses are flagged in plain English",
+    "Ask questions about what you are agreeing to and get straight answers",
+    "Reminders before auto-renewals"
+  ]
+}
