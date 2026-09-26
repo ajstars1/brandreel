@@ -1,0 +1,45 @@
+{
+  "name": "brandreel",
+  "version": "0.1.0",
+  "description": "Branded motion-graphics videos from a JSON script. HTML + GSAP scenes, rendered frame by frame to MP4.",
+  "type": "module",
+  "license": "MIT",
+  "bin": {
+    "brandreel": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "static"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.runtime.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.runtime.json --noEmit",
+    "test": "vitest run",
+    "example": "npm run build && node dist/cli.js render examples/acme/video.json",
+    "prepublishOnly": "npm run build && npm test"
+  },
+  "keywords": [
+    "video",
+    "motion-graphics",
+    "gsap",
+    "ads",
+    "mp4",
+    "brand"
+  ],
+  "dependencies": {
+    "gsap": "^3.15.0",
+    "playwright-core": "^1.63.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@fontsource/anton": "^5.3.0",
+    "@fontsource/instrument-serif": "^5.3.0",
+    "@fontsource/poppins": "^5.3.0",
+    "@types/node": "^26.6.3",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.2"
+  }
+}

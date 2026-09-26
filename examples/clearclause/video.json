@@ -1,0 +1,63 @@
+{
+  "format": "16:9",
+  "fps": 30,
+  "transition": "wipe",
+  "brand": {
+    "name": "Clearclause",
+    "logo": "logo.svg",
+    "colors": {
+      "primary": "#1f5eff",
+      "primaryDark": "#0b1f66",
+      "accent": "#7fb2ff",
+      "highlight": "#c6f36b",
+      "ink": "#0f1424",
+      "paper": "#f8f9fc",
+      "night": "#060a1a"
+    },
+    "fonts": {
+      "display": { "family": "Anton", "uppercase": true, "files": [{ "src": "fonts/Anton.woff2", "weight": 400 }] },
+      "body": { "family": "Poppins", "files": [
+        { "src": "fonts/Poppins-Regular.woff2", "weight": 400 },
+        { "src": "fonts/Poppins-SemiBold.woff2", "weight": 600 },
+        { "src": "fonts/Poppins-Bold.woff2", "weight": 700 }
+      ] },
+      "accent": { "family": "Instrument Serif", "files": [{ "src": "fonts/InstrumentSerif-Italic.woff2", "weight": 400, "style": "italic" }] }
+    }
+  },
+  "scenes": [
+    { "template": "statement", "duration": 3.8,
+      "lines": ["You signed", "the contract.", "*Then you read it.*"],
+      "card": { "label": "Vendor agreement", "value": "$48,000 / yr", "stamp": "Auto-renew" } },
+    { "template": "strike", "duration": 3.6,
+      "before": "Legal review takes weeks.", "after": "Now it takes *minutes.*" },
+    { "template": "logo-reveal", "duration": 3.6,
+      "tagline": "Meet *Clearclause*, contract review for everyone." },
+    { "template": "doc-scan", "duration": 4.8,
+      "docLabel": "msa-final-v3.pdf", "docTitle": "Master services agreement",
+      "flags": [
+        { "text": "Auto-renews for 3 years", "tone": "warn" },
+        { "text": "Unlimited liability for you", "tone": "bad" },
+        { "text": "Standard termination terms", "tone": "ok" }
+      ],
+      "headline": ["Spot the traps", "*before you sign.*"],
+      "caption": "Drop in any contract. Every risky clause is flagged in plain English." },
+    { "template": "chat", "duration": 6.2,
+      "assistant": "Clearclause",
+      "headline": ["Ask it", "*anything.*"],
+      "caption": "Get straight answers about what you're agreeing to.",
+      "question": "Can they raise the price when we renew?",
+      "answer": "Yes. Clause 9.2 allows up to 12% a year. Here's how others push back:",
+      "results": [
+        { "name": "Cap increases", "tags": ["Common ask"], "score": 92 },
+        { "name": "Add exit window", "tags": ["Low effort"], "score": 81 }
+      ] },
+    { "template": "counter", "duration": 3.8,
+      "value": 12000, "suffix": "+", "title": "contracts reviewed by small teams.", "subtitle": "No lawyer on retainer. *No surprises.*" },
+    { "template": "steps", "duration": 3.8,
+      "headline": ["Three steps.", "*Zero jargon.*"],
+      "steps": ["Upload the contract", "Review the flags", "Sign with confidence"] },
+    { "template": "end-card", "duration": 4,
+      "tagline": "Know what you *sign.*", "cta": "Try it free at clearclause.example",
+      "fineprint": "Fictional brand · made with brandreel" }
+  ]
+}
