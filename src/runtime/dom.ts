@@ -9,10 +9,20 @@ export const setMotion = (next: Motion): void => { motion = next; };
 export const M = (): Motion => motion;
 
 type Child = Node | string | null | undefined | false;
+export type Attrs = string | Record<string, string | number | boolean | null | undefined>;
 
-export const h = (tag: string, className = '', ...children: Child[]): HTMLElement => {
+// h('div', 'a b', ...children) or h('div', { class: 'a b', style: '…', 'data-x': 1 }, ...children).
+export const h = (tag: string, attrs: Attrs = '', ...children: Child[]): HTMLElement => {
   const node = document.createElement(tag);
-  if (className) node.className = className;
+  if (typeof attrs === 'string') { if (attrs) node.className = attrs; }
+  else if (attrs) {
+    for (const [key, value] of Object.entries(attrs)) {
+      if (value === undefined || value === null || value === false) continue;
+      if (key === 'class' || key === 'className') node.className = String(value);
+      else if (key === 'text') node.textContent = String(value);
+      else node.setAttribute(key, value === true ? '' : String(value));
+    }
+  }
   for (const child of children) if (child) node.append(child);
   return node;
 };

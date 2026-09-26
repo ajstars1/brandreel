@@ -36,7 +36,7 @@ The runtime calls your function **once**, before the first frame, and then seeks
 | `layout` | `'landscape'`, `'portrait'` or `'square'`. |
 | `motion` | The style pack's motion preset: `enter`, `stagger`, `ease`, `pop`, `drift`. Use these instead of your own numbers so style packs still apply. |
 | `props` | The scene's `props` object from `video.json`, untouched. |
-| `h(tag, className, ...children)` | Element builder. Children may be nodes, strings, or falsy values (skipped). |
+| `h(tag, classOrAttrs, ...children)` | Element builder: `h('div', 'a b', …)` or `h('div', { class: 'a b', style: '…' }, …)`. Children may be nodes, strings, or falsy values (skipped). |
 | `img(src, className)` | An `<img>`. |
 | `markup(text)` | Text with `*accent*` words as a fragment. |
 | `headline(lines, sizeClass?)` | The masked, line-by-line headline every template uses. Returns `{ node, parts }`; animate `parts` with `revealLines`. Lines never wrap: the runtime shrinks them to fit. |

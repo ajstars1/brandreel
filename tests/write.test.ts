@@ -168,8 +168,8 @@ describe('custom scene code', () => {
     const first = await assemble(kit, dir, draft, { format: '9:16' }, 'test');
     const fixed = GOOD_CODE.replace("['Hello', '*world.*']", "['Fixed', '*frame.*']");
     const writer = fakeWriter([
-      { verdict: 'fix', notes: 'Headline overflowed.', fixes: [{ scene: 1, code: fixed }] },
-      { verdict: 'ok', notes: 'Looks right.', fixes: [] }
+      { frames_seen: 3, verdict: 'fix', notes: 'Headline overflowed.', fixes: [{ scene: 1, code: fixed }] },
+      { frames_seen: 3, verdict: 'ok', notes: 'Looks right.', fixes: [] }
     ]);
     const stillsCalls: number[][] = [];
     const review = await reviewCustomScenes(writer, { ...first, draft, attempts: 1, usage: { input: 0, output: 0 } }, {
@@ -177,11 +177,44 @@ describe('custom scene code', () => {
       stills: async (_project, times) => { stillsCalls.push(times); return []; }
     });
     expect(review.rounds).toBe(2);
+    expect(review.unresolved).toEqual([]);
     expect(review.notes).toEqual(['Round 1: Headline overflowed.', 'Round 2: Looks right.']);
     expect(stillsCalls[0]).toEqual([1, 2.4, 3.8]);                       // 25%, 60%, 95% of a 4 s first scene
     expect(review.outcome.draft.scenes[0]?.code).toBe(fixed);
     expect(await readFile(path.join(dir, 'drafts', 'r', 'scene-1.js'), 'utf8')).toContain('Fixed');
-    expect(String(writer.calls[0]?.[0]?.content?.[0]?.['text'] ?? JSON.stringify(writer.calls[0]?.[0]?.content))).toMatch(/Frames of the custom scene/);
+    expect(String(writer.calls[0]?.[0]?.content?.[0]?.['text'] ?? JSON.stringify(writer.calls[0]?.[0]?.content))).toMatch(/frames of the custom scene/i);
+  });
+});
+
+describe('review guards', () => {
+  it('does not accept "ok" while the audit still finds problems, and reports them at the end', async () => {
+    const { kit, dir } = await tempKit();
+    const draft: Draft = { title: 'A', slug: 'a', scenes: [{ template: 'custom', duration: 4, code: GOOD_CODE }] };
+    const first = await assemble(kit, dir, draft, { format: '9:16' }, 'test');
+    const writer = fakeWriter([{ frames_seen: 3, verdict: 'ok', notes: 'Fine by me.', fixes: [] }, { frames_seen: 3, verdict: 'ok', notes: 'Still fine.', fixes: [] }]);
+    const review = await reviewCustomScenes(writer, { ...first, draft, attempts: 1, usage: { input: 0, output: 0 } }, {
+      rounds: 2, kit, kitDir: dir, input: { format: '9:16' }, directory: path.join(dir, 'review'),
+      stills: async () => ['/tmp/x.png', '/tmp/y.png', '/tmp/z.png'],
+      image: async () => ({ data: 'AA', mediaType: 'image/jpeg' }),
+      audit: async () => ({ 0: ['the content occupies 2% of the frame'] })
+    });
+    expect(review.rounds).toBe(2);
+    expect(review.unresolved).toEqual(['scene 1: the content occupies 2% of the frame']);
+    expect(review.notes.join(' ')).toMatch(/no fix was offered/);
+    const sent = String(JSON.stringify(writer.calls[0]));
+    expect(sent).toMatch(/Automatic checks on the rendered DOM found/);
+  });
+
+  it('distrusts a reviewer that did not look at every frame', async () => {
+    const { kit, dir } = await tempKit();
+    const draft: Draft = { title: 'B', slug: 'b', scenes: [{ template: 'custom', duration: 4, code: GOOD_CODE }] };
+    const first = await assemble(kit, dir, draft, { format: '9:16' }, 'test');
+    const writer = fakeWriter([{ frames_seen: 0, verdict: 'ok', notes: 'Looks great.', fixes: [] }]);
+    const review = await reviewCustomScenes(writer, { ...first, draft, attempts: 1, usage: { input: 0, output: 0 } }, {
+      rounds: 1, kit, kitDir: dir, input: { format: '9:16' }, directory: path.join(dir, 'review'),
+      stills: async () => ['/tmp/x.png'], image: async () => ({ data: 'AA', mediaType: 'image/jpeg' }), audit: async () => ({})
+    });
+    expect(review.notes.join(' ')).toMatch(/looked at 0 of 1 frames/);
   });
 });
 

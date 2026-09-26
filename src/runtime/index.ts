@@ -70,6 +70,48 @@ function buildScene<T extends TemplateName>(root: HTMLElement, scene: Extract<Sc
   return template(root, scene, context);
 }
 
+const sceneRoots: HTMLElement[] = [];
+
+// What a designer would spot at a glance, expressed as checks. Used by the review loop so
+// the model gets facts about the rendered frame, not only pixels.
+function auditScene(stage: HTMLElement, index: number): string[] {
+  const root = sceneRoots[index];
+  if (!root) return [`scene ${index + 1}: not found`];
+  const problems: string[] = [];
+  const frame = stage.getBoundingClientRect();
+  const scale = frame.width / stage.offsetWidth;   // stage is scaled to the viewport
+  const all = [...root.querySelectorAll<HTMLElement>('*')];
+  if (all.some(node => node.className === '[object Object]')) problems.push('h() was called with an object where a class string was expected, so no classes were applied; use h(tag, { class: "…" }) or h(tag, "…")');
+  const visible = all.filter(node => {
+    const style = getComputedStyle(node);
+    if (style.visibility === 'hidden' || style.display === 'none' || Number(style.opacity) === 0) return false;
+    const rect = node.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  });
+  const textual = visible.filter(node => [...node.childNodes].some(child => child.nodeType === Node.TEXT_NODE && (child.textContent ?? '').trim()));
+  if (!textual.length) problems.push('no visible text in the scene');
+  const tiny = textual.filter(node => parseFloat(getComputedStyle(node).fontSize) < 22);
+  if (tiny.length) problems.push(`${tiny.length} text element${tiny.length > 1 ? 's' : ''} smaller than 22px (design px): "${(tiny[0]?.textContent ?? '').trim().slice(0, 40)}"…`);
+  let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+  for (const node of textual) {
+    const rect = node.getBoundingClientRect();
+    left = Math.min(left, rect.left); top = Math.min(top, rect.top); right = Math.max(right, rect.right); bottom = Math.max(bottom, rect.bottom);
+    if (rect.left < frame.left - 2 || rect.right > frame.right + 2 || rect.top < frame.top - 2 || rect.bottom > frame.bottom + 2) {
+      problems.push(`text runs outside the frame: "${(node.textContent ?? '').trim().slice(0, 40)}"`);
+      break;
+    }
+  }
+  if (textual.length) {
+    const area = ((right - left) * (bottom - top)) / (frame.width * frame.height);
+    if (area < .06) problems.push(`the content occupies ${Math.round(area * 100)}% of the frame, bunched at ${Math.round((left - frame.left) / scale)},${Math.round((top - frame.top) / scale)}; the layout has probably collapsed`);
+  }
+  const safeTop = parseFloat(getComputedStyle(stage).getPropertyValue('--safe-top')) || 0;
+  const safeBottom = parseFloat(getComputedStyle(stage).getPropertyValue('--safe-bottom')) || 0;
+  if (safeTop && textual.some(node => node.getBoundingClientRect().top < frame.top + safeTop * scale - 1)) problems.push('text sits in the top safe band that app controls cover');
+  if (safeBottom && textual.some(node => node.getBoundingClientRect().bottom > frame.bottom - safeBottom * scale + 1)) problems.push('text sits in the bottom safe band that app controls cover');
+  return problems;
+}
+
 function build(video: Video, stage: HTMLElement, layout: Layout): gsap.core.Timeline {
   const pack = STYLE_PACKS[video.style.extends];
   setMotion({ ...pack.motion, ...video.style.motion });
@@ -79,6 +121,7 @@ function build(video: Video, stage: HTMLElement, layout: Layout): gsap.core.Time
   video.scenes.forEach((scene, index) => {
     const root = sceneRoot(video, scene);
     stage.append(root);
+    sceneRoots.push(root);
     const timeline = buildScene(root, scene, { brand: video.brand, duration: scene.duration, layout });
     // Squeeze the entrances when a scene is shorter than its template's natural length.
     if (timeline.duration() > scene.duration) timeline.timeScale(timeline.duration() / scene.duration);
@@ -162,7 +205,7 @@ async function start(): Promise<void> {
     const scale = Math.min(w / (width * design), hgt / (height * design));
     stage.style.transform = `translate(${(w - width * design * scale) / 2}px, ${(hgt - height * design * scale) / 2}px) scale(${scale})`;
   };
-  window.brandreel = { duration, width, height, seek: time => { master.seek(time, false); } };
+  window.brandreel = { duration, width, height, seek: time => { master.seek(time, false); }, audit: index => auditScene(stage, index) };
 
   if (params.has('render')) { fit(width, height); return; }
   const resize = (): void => fit(innerWidth, innerHeight);

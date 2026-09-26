@@ -4,6 +4,8 @@ export interface ReelApi {
   width: number;
   height: number;
   seek: (time: number) => void;
+  // Mechanical checks on one scene at the current time: collapsed layout, overflow, tiny text.
+  audit?: (sceneIndex: number) => string[];
   error?: string;
 }
 

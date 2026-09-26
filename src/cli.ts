@@ -11,7 +11,7 @@ import { applyLook, assemble, draftSchema, loadKit, lookPrompt, lookSample, relo
 import { info, progress, warn } from './log.js';
 import { loadProject, loadProjectFrom, SpecError } from './load.js';
 import { totalDuration as videoLength } from './spec.js';
-import { renderStills, renderVideo } from './render.js';
+import { auditScenes, renderStills, renderVideo } from './render.js';
 import { startServer } from './server.js';
 import { FORMATS, STYLE_PACK_NAMES, totalDuration, type FormatName, type StylePackName } from './spec.js';
 
@@ -140,8 +140,9 @@ async function write(brief: string | undefined, values: Values): Promise<number>
       if (customCount && rounds > 0) {
         info(`Reviewing ${customCount} custom scene${customCount > 1 ? 's' : ''} (${rounds} round${rounds > 1 ? 's' : ''})…`);
         const slug = slugify(outcome.draft.slug || outcome.draft.title);
-        const review = await reviewCustomScenes(writer, outcome, { rounds, stills: renderStills, directory: path.join(dir, 'drafts', slug, 'review'), input, kit, kitDir: dir });
+        const review = await reviewCustomScenes(writer, outcome, { rounds, stills: renderStills, audit: auditScenes, directory: path.join(dir, 'drafts', slug, 'review'), input, kit, kitDir: dir });
         review.notes.forEach(note => info(`  ${note}`));
+        review.unresolved.forEach(problem => warn(`  ⚠ still open: ${problem}`));
         outcome = review.outcome;
       }
     } catch (error) {
@@ -172,6 +173,11 @@ async function write(brief: string | undefined, values: Values): Promise<number>
     const times = scenes.map(scene => { const mid = at + scene.duration * .6; at += scene.duration; return Number(mid.toFixed(2)); });
     const files = await renderStills(outcome.project, times, path.join(path.dirname(path.resolve(output)), slug));
     info(`Stills: ${path.dirname(files[0] ?? '')}`);
+    const checks = scenes.flatMap((scene, index) => scene.template === 'custom' ? [{ index, time: times[index] ?? 0 }] : []);
+    if (checks.length) {
+      const audit = await auditScenes(outcome.project, checks);
+      for (const [index, problems] of Object.entries(audit)) problems.forEach(problem => warn(`  ⚠ scene ${Number(index) + 1}: ${problem}`));
+    }
   }
   info(`Next: brandreel preview ${output}   ·   brandreel render ${output}`);
   return 0;

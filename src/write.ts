@@ -150,7 +150,8 @@ A custom scene module:
     const { gsap, h, img, markup, headline, kicker, revealLines, fadeUp, popIn, countUp, drift, brand, duration, layout, motion } = api;
     const tl = gsap.timeline();
     root.classList.add('my-scene');            // prefix every CSS selector with this class
-    ...build DOM with h() and append to root...
+    ...build DOM with h(tag, 'class names', ...children) or h(tag, { class: '…', style: '…' }, ...children) and append to root...
+    ...api.headline(lines) for headlines (returns { node, parts }); markup(text) for *accent* words; never write text through innerHTML...
     ...add tweens to tl; use motion.enter / motion.ease / motion.pop / motion.stagger...
     return tl;                                  // required: a timeline starting at 0
   }
@@ -320,6 +321,7 @@ export async function writeVideo(writer: Writer, input: WriteInput, kitDir: stri
 
 // ---- Review: the model looks at frames of the scenes it wrote and fixes what is wrong ----
 export const reviewSchema = z.object({
+  frames_seen: z.number(),      // how many of the frames the reviewer actually looked at
   verdict: z.enum(['ok', 'fix']),
   notes: z.string(),
   fixes: z.array(z.object({ scene: z.number(), code: z.string().optional(), css: z.string().optional() }))
@@ -328,9 +330,12 @@ export type Review = z.infer<typeof reviewSchema>;
 
 export const REVIEW_SYSTEM = `You are reviewing frames rendered from custom brandreel scenes you wrote. Judge them as a motion designer would: is every word inside the frame and readable, does nothing overlap, do the elements sit where the code intended, does the scene look finished rather than broken or empty, does it read at 9:16 as well as 16:9 when both are shown. Frames are sampled at 25%, 60% and 95% of the scene, so early frames may still be animating in; judge the 60% and 95% frames for layout.
 
+Look at every frame before you judge; report how many you examined in frames_seen. Automatic checks on the rendered DOM are included when they found something; treat them as facts that outrank your impression of the pixels.
+
 Reply with verdict "ok" when the scenes pass, or "fix" with a complete replacement "code" (and "css" if needed) for each scene that needs work. Keep the same contract and rules as before. Scene numbers are 1-based positions in the video.`;
 
 export type StillsFn = (project: Project, times: number[], directory: string) => Promise<string[]>;
+export type AuditFn = (project: Project, checks: { index: number; time: number }[]) => Promise<Record<number, string[]>>;
 export type ImageFn = (file: string) => Promise<{ data: string; mediaType: 'image/jpeg' | 'image/png' }>;
 
 // A 960px JPEG of a still, base64, so review rounds stay cheap.
@@ -345,6 +350,7 @@ export const jpegOf: ImageFn = file => new Promise((resolve, reject) => {
 export interface ReviewOptions {
   rounds: number;
   stills: StillsFn;
+  audit?: AuditFn;
   image?: ImageFn;
   directory: string;                       // where stills go
   input: Pick<WriteInput, 'format' | 'style'>;
@@ -352,38 +358,57 @@ export interface ReviewOptions {
   kitDir: string;
 }
 
-export interface ReviewOutcome { rounds: number; notes: string[]; outcome: WriteOutcome }
+export interface ReviewOutcome { rounds: number; notes: string[]; outcome: WriteOutcome; unresolved: string[] }
+
+const customChecks = (draft: Draft): { index: number; time: number }[] => {
+  let at = 0;
+  return draft.scenes.flatMap((scene, index) => { const start = at; at += scene.duration; return scene.template === 'custom' ? [{ index, time: Number((start + scene.duration * .6).toFixed(2)) }] : []; });
+};
+
+const formatAudit = (audit: Record<number, string[]>): string[] =>
+  Object.entries(audit).flatMap(([index, problems]) => problems.map(problem => `scene ${Number(index) + 1}: ${problem}`));
 
 export async function reviewCustomScenes(writer: Writer, outcome: WriteOutcome, options: ReviewOptions): Promise<ReviewOutcome> {
   const image = options.image ?? jpegOf;
   const notes: string[] = [];
   let current = outcome;
+  let unresolved: string[] = [];
   for (let round = 1; round <= options.rounds; round++) {
     const customs = current.draft.scenes.map((scene, index) => ({ scene, index })).filter(({ scene }) => scene.template === 'custom');
-    if (!customs.length) return { rounds: round - 1, notes, outcome: current };
+    if (!customs.length) return { rounds: round - 1, notes, outcome: current, unresolved };
     // Sample each custom scene at three points.
     let at = 0;
     const starts = current.draft.scenes.map(scene => { const start = at; at += scene.duration; return start; });
     const times = customs.flatMap(({ index }) => [.25, .6, .95].map(f => Number(((starts[index] ?? 0) + (current.draft.scenes[index]?.duration ?? 1) * f).toFixed(2))));
     let problem: string | null = null;
     let files: string[] = [];
-    try { files = await options.stills(current.project, times, options.directory); }
-    catch (error) { problem = error instanceof Error ? error.message : String(error); }
+    let findings: string[] = [];
+    try {
+      files = await options.stills(current.project, times, options.directory);
+      if (options.audit) findings = formatAudit(await options.audit(current.project, customChecks(current.draft)));
+    } catch (error) { problem = error instanceof Error ? error.message : String(error); }
+    unresolved = problem ? [problem] : findings;
 
     const content: Anthropic.ContentBlockParam[] = [];
     if (problem) {
       content.push({ type: 'text', text: `Rendering the custom scenes failed:\n${problem}\n\nFix the code so the scene renders. Return verdict "fix" with the complete replacement.` });
     } else {
-      content.push({ type: 'text', text: `Frames of the custom scene${customs.length > 1 ? 's' : ''} at 25%, 60% and 95% of each scene, in order.` });
-      for (const file of files) content.push({ type: 'image', source: { type: 'base64', media_type: (await image(file)).mediaType, data: (await image(file)).data } });
+      content.push({ type: 'text', text: `${files.length} frames of the custom scene${customs.length > 1 ? 's' : ''} at 25%, 60% and 95% of each scene, in order.` });
+      for (const file of files) { const picture = await image(file); content.push({ type: 'image', source: { type: 'base64', media_type: picture.mediaType, data: picture.data } }); }
+      if (findings.length) content.push({ type: 'text', text: `Automatic checks on the rendered DOM found:\n${findings.map(finding => `- ${finding}`).join('\n')}\nThese must be fixed; the verdict cannot be "ok" while they stand.` });
     }
     content.push({ type: 'text', text: customs.map(({ scene, index }) => `Scene ${index + 1} (${scene.duration}s) code:\n${scene.code ?? ''}\n${scene.css ? `Scene ${index + 1} CSS:\n${scene.css}` : ''}`).join('\n\n') });
     const result = await writer.draft(REVIEW_SYSTEM, [{ role: 'user', content }], reviewSchema);
     if (result.usage) { current.usage.input += result.usage.input; current.usage.output += result.usage.output; }
     if (!result.value) { notes.push(`Round ${round}: the review reply did not match the schema.`); continue; }
     notes.push(`Round ${round}: ${result.value.notes}`);
-    if (result.value.verdict === 'ok' && !problem) return { rounds: round, notes, outcome: current };
-    if (!result.value.fixes.length) { if (problem) continue; return { rounds: round, notes, outcome: current }; }
+    const blind = !problem && files.length > 0 && result.value.frames_seen < files.length;
+    if (blind) notes.push(`Round ${round}: the reviewer looked at ${result.value.frames_seen} of ${files.length} frames, so its verdict is not trusted.`);
+    if (result.value.verdict === 'ok' && !problem && !findings.length && !blind) return { rounds: round, notes, outcome: current, unresolved: [] };
+    if (!result.value.fixes.length) {
+      if (findings.length) notes.push(`Round ${round}: no fix was offered for the automatic findings.`);
+      continue;
+    }
     const draft: Draft = structuredClone(current.draft);
     for (const fix of result.value.fixes) {
       const scene = draft.scenes[fix.scene - 1];
@@ -399,7 +424,12 @@ export async function reviewCustomScenes(writer: Writer, outcome: WriteOutcome, 
       notes.push(`Round ${round}: the fix did not validate (${error.message.split('\n')[0]}); keeping the previous version.`);
     }
   }
-  return { rounds: options.rounds, notes, outcome: current };
+  // The last fix was applied after the last look; check it mechanically so nothing broken ships quietly.
+  if (options.audit) {
+    try { unresolved = formatAudit(await options.audit(current.project, customChecks(current.draft))); }
+    catch (error) { unresolved = [error instanceof Error ? error.message : String(error)]; }
+  }
+  return { rounds: options.rounds, notes, outcome: current, unresolved };
 }
 
 // ---- Look: a style pack of the brand's own, drafted from a description ----

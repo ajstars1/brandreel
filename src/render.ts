@@ -117,6 +117,27 @@ export async function renderVideo(project: Project, options: RenderOptions): Pro
   }
 }
 
+// Seeks to each (scene, time) and runs the page's own checks on that scene.
+export async function auditScenes(project: Project, checks: { index: number; time: number }[]): Promise<Record<number, string[]>> {
+  const server = await startServer(project);
+  const browser = await launchBrowser();
+  try {
+    const probe = await openPage(browser, server.url);
+    const { width, height } = probe.info;
+    await probe.page.context().close();
+    const { page } = await openPage(browser, server.url, { width, height });
+    const results: Record<number, string[]> = {};
+    for (const check of checks) {
+      await seek(page, check.time);
+      results[check.index] = await page.evaluate(index => window.brandreel?.audit?.(index) ?? [], check.index);
+    }
+    return results;
+  } finally {
+    await browser.close();
+    await server.close();
+  }
+}
+
 export async function renderStills(project: Project, times: number[], directory: string, options: { guides?: boolean } = {}): Promise<string[]> {
   const server = await startServer(project);
   const browser = await launchBrowser();
