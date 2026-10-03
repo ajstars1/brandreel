@@ -71,6 +71,7 @@ export async function loadProjectFrom(raw: unknown, baseDir: string, label: stri
     if (scene.template === 'custom') {
       scene.code = await register(scene.code, 'Scene code');
       if (scene.css) scene.css = await register(scene.css, 'Scene CSS');
+      for (const [name, src] of Object.entries(scene.images)) scene.images[name] = await register(src, `Image "${name}"`);
     }
   }
   let audio: Project['audio'];

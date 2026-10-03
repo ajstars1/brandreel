@@ -164,7 +164,9 @@ const custom = z.object({
   template: z.literal('custom'), ...base,
   code: text,
   css: z.string().optional(),
-  props: z.record(z.string(), z.unknown()).default({})
+  props: z.record(z.string(), z.unknown()).default({}),
+  // Named local images the scene shows, read as api.images.<name>. The loader serves them.
+  images: z.record(z.string(), text).default({})
 });
 
 export const sceneSchema = z.discriminatedUnion('template', [

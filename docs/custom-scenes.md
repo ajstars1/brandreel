@@ -36,6 +36,7 @@ The runtime calls your function **once**, before the first frame, and then seeks
 | `layout` | `'landscape'`, `'portrait'` or `'square'`. |
 | `motion` | The style pack's motion preset: `enter`, `stagger`, `ease`, `pop`, `drift`. Use these instead of your own numbers so style packs still apply. |
 | `props` | The scene's `props` object from `video.json`, untouched. |
+| `images` | The scene's `images` map from `video.json` (`{ "photo": "family.jpg" }`), with each path rewritten to a served URL: `api.img(api.images.photo, 'portrait')`. |
 | `h(tag, classOrAttrs, ...children)` | Element builder: `h('div', 'a b', …)` or `h('div', { class: 'a b', style: '…' }, …)`. Children may be nodes, strings, or falsy values (skipped). |
 | `img(src, className)` | An `<img>`. |
 | `markup(text)` | Text with `*accent*` words as a fragment. |
@@ -53,7 +54,13 @@ Theme and brand variables to use in CSS or inline styles: `--scene-fg`, `--scene
 2. **One file, no imports.** The module is loaded on its own; take everything from `api`. (The page serves `gsap` through an import map, but you already have it as `api.gsap`.)
 3. **Return the timeline.** It must be an `api.gsap.timeline()`; the runtime places it on the master timeline and speeds it up if it runs longer than the scene.
 4. **Scope your CSS.** Add a class to `root` and prefix every selector with it, or the styles leak into other scenes.
-5. **Load nothing external.** Images must come from `brand.logo` or a path in `props` that the video lists (the loader only serves files it knows about).
+5. **Load nothing external.** Images must come from `brand.logo` or the scene's `images` map. Paths in `props` are not served; list photos under `images` so the loader can find them:
+
+   ```jsonc
+   { "template": "custom", "duration": 5, "code": "scenes/portrait.js",
+     "images": { "photo": "photos/founders.jpg" },
+     "props": { "caption": "The hands behind every stitch" } }
+   ```
 
 Errors in a custom scene fail the render with the message, so a typo never produces a silent black frame.
 

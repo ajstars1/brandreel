@@ -20,7 +20,7 @@ export const custom: Template<'custom'> = (root, scene, context) => {
   if (!mod) throw new Error(`${scene.code}: scene module was not loaded`);
   root.classList.add('custom');
   const timeline = mod.default(root, {
-    gsap, brand: context.brand, duration: context.duration, layout: context.layout, motion: M(), props: scene.props,
+    gsap, brand: context.brand, duration: context.duration, layout: context.layout, motion: M(), props: scene.props, images: scene.images,
     h, img, markup, headline, kicker, revealLines, fadeUp, popIn, countUp, drift
   });
   if (!(timeline instanceof gsap.core.Timeline)) throw new Error(`${scene.code}: the scene function must return a gsap.timeline()`);

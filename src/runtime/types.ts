@@ -22,7 +22,8 @@ export interface CustomSceneApi {
   layout: Layout;
   motion: Motion;
   props: Record<string, unknown>;
-  h: (tag: string, attrs?: string | Record<string, string | number | boolean | null | undefined>, ...children: Array<Node | string | null | undefined | false>) => HTMLElement;
+  images: Record<string, string>;   // the scene's `images`, as served URLs for api.img()
+  h:(tag: string, attrs?: string | Record<string, string | number | boolean | null | undefined>, ...children: Array<Node | string | null | undefined | false>) => HTMLElement;
   img: (src: string, className?: string) => HTMLImageElement;
   markup: (source: string) => DocumentFragment;
   headline: (lines: string[], sizeClass?: string) => { node: HTMLElement; parts: HTMLElement[] };
